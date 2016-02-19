@@ -1,5 +1,3 @@
-% Data Representation in Rust
+% Представление данных в Rust
 
-Low-level programming cares a lot about data layout. It's a big deal. It also
-pervasively influences the rest of the language, so we're going to start by
-digging into how data is represented in Rust.
+Низкоуровневое программирование уделяет много вниманию тому, как представляются данные. Это сложный вопрос. Он влияет на весь язык, поэтому начнем копать в направлении представления данных в Rust.

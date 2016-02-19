@@ -1,44 +1,20 @@
-# Rustonomicon
+% Растономикон (игра слов - Rust и Некрономикон - книга, которая обладал каждый алхимик в средние века, дословно можно перевести как "Воплощение закон метрвых")
 
-Перевод "Rustonomicon"
+#### Темное искуство продвинутого и небезопасного программирования на Rust
 
-# Оригинал
+# Внимание: Это сырой документ, поэтому может содержать серьезные ошибки.
 
-https://github.com/rust-lang/rust/tree/master/src/doc/nomicon
+> Вместо писания программ, что было моей мечтой, мной овладела тоска и невыразимое одиночество; и наконец я увидел страшную правду, в сторону которой остальные боялись даже дышать — непроизносимая тайна тайн открылась мне: этот язык камня и режущих звуков не способен сохранить в себе черт старого языка как Лондон старого Лондона, а Париж старого Парижа, и что на самом деле он довольно небезопасный, а его   распростертые внутренности дурно набальзамированы и заселены странными существами, в  действительности не имеющими ничего общего с тем, как все выглядит на этапе компиляции.
 
-## The Dark Arts of Advanced and Unsafe Rust Programming
+Эта книга копает вглубь ужасных деталей, которые нужно понять для правильного написания небезопасных программ на Rust. В связи с характером проблем, 
+все может привести к высвобождению невыразимого страха, который разорвет вашу психику на миллиард бесконечно малых фрагментов отчаяния.
 
-# NOTE: This is a draft document, and may contain serious errors
+Хотите иметь долгую и счастливую карьеру программиста на Rust? Закройте и никогда не вспоминайте, что вы видели эту книгу. Она вам не нужна. Но если вы все же захотите написать небезопасный код -- или просто покопаться во внутренностях языка -- здесь содержится бесценная информация.
 
-> Instead of the programs I had hoped for, there came only a shuddering blackness
-and ineffable loneliness; and I saw at last a fearful truth which no one had
-ever dared to breathe before — the unwhisperable secret of secrets — The fact
-that this language of stone and stridor is not a sentient perpetuation of Rust
-as London is of Old London and Paris of Old Paris, but that it is in fact
-quite unsafe, its sprawling body imperfectly embalmed and infested with queer
-animate things which have nothing to do with it as it was in compilation.
+В отличие от [книги][trpl] мы предполагаем, что у вас есть обширные бызовые знания. По крайней мере вы должны быть знакомы с системным программированием и Rust.
+Если это не так, то сначала почитайте [книгу][trpl]. Хотя мы не предполагаем, что вы знаете все вообще, и будем время от времени освежать основы там, где это нужно. Вы можете пропустить чтение той книги, если хотите; просто знайте, что мы не будем объяснять все, начиная с основ.
 
-This book digs into all the awful details that are necessary to understand in
-order to write correct Unsafe Rust programs. Due to the nature of this problem,
-it may lead to unleashing untold horrors that shatter your psyche into a billion
-infinitesimal fragments of despair.
+Для ясности, эта книга погрузит вас в глубокие детали. Мы нырнем в безопасность во время исключительных ситуаций, псевдонимы указателей, модели памяти и даже теорию типов.
+Мы будем много рассказывать о различных типах безопасности и гарантий.
 
-Should you wish a long and happy career of writing Rust programs, you should
-turn back now and forget you ever saw this book. It is not necessary. However
-if you intend to write unsafe code -- or just want to dig into the guts of the
-language -- this book contains invaluable information.
-
-Unlike [The Book][trpl] we will be assuming considerable prior knowledge. In
-particular, you should be comfortable with basic systems programming and Rust.
-If you don't feel comfortable with these topics, you should consider [reading
-The Book][trpl] first. Though we will not be assuming that you have, and will
-take care to occasionally give a refresher on the basics where appropriate. You
-can skip straight to this book if you want; just know that we won't be
-explaining everything from the ground up.
-
-To be clear, this book goes into deep detail. We're going to dig into
-exception-safety, pointer aliasing, memory models, and even some type-theory.
-We will also be spending a lot of time talking about the different kinds
-of safety and guarantees.
-
-[trpl]: https://github.com/ruRust/rust_book_ru
+[trpl]: ../книга/
