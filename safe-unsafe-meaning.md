@@ -1,115 +1,120 @@
-% How Safe and Unsafe Interact
+% Как взаимодействуют Безопасный и Небезопасный код
 
-So what's the relationship between Safe and Unsafe Rust? How do they interact?
+Итак, какие отношения между Безопасным и Небезопасным Rust? Как они
+взаимодействуют?
 
-Rust models the separation between Safe and Unsafe Rust with the `unsafe`
-keyword, which can be thought as a sort of *foreign function interface* (FFI)
-between Safe and Unsafe Rust. This is the magic behind why we can say Safe Rust
-is a safe language: all the scary unsafe bits are relegated exclusively to FFI
-*just like every other safe language*.
+Rust моделирует разделение между Безопасным и Небезопасным Rust ключевым словом
+`unsafe`, которое можно трактовать как *интерфейс внешних функций (foreign
+function interface)* (FFI) между Безопасным и Небезопасным Rust. Это магия,
+благодаря которой можно сказать, что Безопасный Rust - действительно безопасен:
+вся работа со страшными небезопасными битами отводится исключительно FFI, *как в
+любом другом безопасном языке*.
 
-However because one language is a subset of the other, the two can be cleanly
-intermixed as long as the boundary between Safe and Unsafe Rust is denoted with
-the `unsafe` keyword. No need to write headers, initialize runtimes, or any of
-that other FFI boiler-plate.
+Но из-за того, что один язык, получается, входит в другой, их можно спокойно
+смешивать, обозначая границы между ними ключевым словом `unsafe`. Не надо писать
+заголовочные файлы, инициализировать среду исполнения или какую-либо другую
+рутину по обработке FFI.
 
-There are several places `unsafe` can appear in Rust today, which can largely be
-grouped into two categories:
+Сегодня есть несколько мест, где может появиться `unsafe` в Rust, которые грубо
+можно разделить на две категории:
 
-* There are unchecked contracts here. To declare you understand this, I require
-you to write `unsafe` elsewhere:
-    * On functions, `unsafe` is declaring the function to be unsafe to call.
-      Users of the function must check the documentation to determine what this
-      means, and then have to write `unsafe` somewhere to identify that they're
-      aware of the danger.
-    * On trait declarations, `unsafe` is declaring that *implementing* the trait
-      is an unsafe operation, as it has contracts that other unsafe code is free
-      to trust blindly. (More on this below.)
+* У вас есть непроверенные контракты. Чтобы убедиться, что вы поняли что имеется
+ввиду, я рекомендую писать `unsafe` в следующих случаях:     * Перед функциями
+`unsafe` показывает, что ее вызывать небезопасно. Пользователи должны посмотреть
+документацию, чтобы определить, что это значит, и написать `unsafe`, чтобы
+подтвердить, что они знают об опасности.     * Перед объявлением типажей
+`unsafe` показывает, что *реализация* типажа является небезопасной операцией,
+потому что у него есть контракты, которым другой небезопасный код имеет право
+слепо доверять. (Больше об этом ниже.)
 
-* I am declaring that I have, to the best of my knowledge, adhered to the
-unchecked contracts:
-    * On trait implementations, `unsafe` is declaring that the contract of the
-      `unsafe` trait has been upheld.
-    * On blocks, `unsafe` is declaring any unsafety from an unsafe
-      operation within to be handled, and therefore the parent function is safe.
+* Я заявляю, в меру своих знаний, что придерживался непроверенным контрактов:
+* В реализации типажей `unsafe` показывает, что соблюдается контракт типажа
+`unsafe`.     * В блоках `unsafe` показывает, что любая работа с небезопасными
+операциями должна обрабатываться внутри, и, следовательно, родительская функция
+безопасна.
 
-There is also `#[unsafe_no_drop_flag]`, which is a special case that exists for
-historical reasons and is in the process of being phased out. See the section on
-[drop flags] for details.
+Также есть флаг `#[unsafe_no_drop_flag]`, который являются особым случаем,
+присутствующим по историческим причинам и находящимся на пути к выпиливанию.
+Смотри раздел [drop flags] для уточнения.
 
-Some examples of unsafe functions:
+Примеры небезопасных функций:
 
-* `slice::get_unchecked` will perform unchecked indexing, allowing memory
-  safety to be freely violated.
-* every raw pointer to sized type has intrinsic `offset` method that invokes
-  Undefined Behavior if it is not "in bounds" as defined by LLVM.
-* `mem::transmute` reinterprets some value as having the given type,
-  bypassing type safety in arbitrary ways. (see [conversions] for details)
-* All FFI functions are `unsafe` because they can do arbitrary things.
-  C being an obvious culprit, but generally any language can do something
-  that Rust isn't happy about.
+* `slice::get_unchecked` выполняет непроверенное индексирование, позволяющее
+свободно нарушить безопасность памяти. * каждый сырой указатель на тип
+фиксированного размера обладает внутренним методом `offset`, который вызывает
+Неопределенное Поведение, если находится "вне границ", определяемых LLVM. *
+`mem::transmute` интерпретирует значение полученного типа по-другому, самовольно
+обходя безопасность типов. (смотри [conversions] для уточнения) * Все функции
+FFI являются `unsafe`, потому что могут делать произвольные вещи. C является
+очевидным виновником этого, но вообще-то любой язык может сделать что-то, от
+чего Rust будет не в восторге.
 
-As of Rust 1.0 there are exactly two unsafe traits:
+В Rust 1.0 есть ровно два небезопасных типажа:
 
-* `Send` is a marker trait (it has no actual API) that promises implementors
-  are safe to send (move) to another thread.
-* `Sync` is a marker trait that promises that threads can safely share
-  implementors through a shared reference.
+* `Send` - это маркерный типаж (у него нет своего API), который обещает, что его
+* `реализации можно безопасно посылать (перемещать) в другой поток. Sync` - это
+* `маркерный типаж, который обещает, что потоки могут безопасно делить его
+* `реализацию между собой через общую ссылку на него.
 
-The need for unsafe traits boils down to the fundamental property of safe code:
+Необходимость в небезопасных типаж кроется в основных свойствах безопасного
+кода:
 
-**No matter how completely awful Safe code is, it can't cause Undefined
-Behavior.**
+**Каким бы убогим ни был Безопасный код, он не сможет вызвать Неопределенное
+**поведение.
 
-This means that Unsafe Rust, **the royal vanguard of Undefined Behavior**, has to be
-*super paranoid* about generic safe code. To be clear, Unsafe Rust is totally free to trust
-specific safe code. Anything else would degenerate into infinite spirals of
-paranoid despair. In particular it's generally regarded as ok to trust the standard library
-to be correct. `std` is effectively an extension of the language, and you
-really just have to trust the language. If `std` fails to uphold the
-guarantees it declares, then it's basically a language bug.
+Это означает, что Небезопасный Rust, **королевский авангард Неопределенного
+поведения**, *супер параноидально* относится к общему безопасному коду. Объясняя
+яснее, Небезопасный Rust доверяет абсолютно конкретному безопасному коду.
+Остальной код вырождается в бесконечные спирали параноидального отчаяния для
+него. В частности, обычно нормальным считается доверять корректности стандартной
+библиотеки. `std` - это полезное расширение языка, вам, действительно, следует
+доверять ему. Если `std` нарушает свои гарантии, тогда, возможно, это ошибка
+языка.
 
-That said, it would be best to minimize *needlessly* relying on properties of
-concrete safe code. Bugs happen! Of course, I must reinforce that this is only
-a concern for Unsafe code. Safe code can blindly trust anyone and everyone
-as far as basic memory-safety is concerned.
+Тем не менее, лучше минимизировать напрасные надежды на железобетонность
+безопасного кода. Ошибки случаются! Конечно, я должен подтвердить, что это
+только беспокойство за Небезопасный код. Безопасный код может слепо верить
+всему, что не нарушает безопасность памяти.
 
-On the other hand, safe traits are free to declare arbitrary contracts, but because
-implementing them is safe, unsafe code can't trust those contracts to actually
-be upheld. This is different from the concrete case because *anyone* can
-randomly implement the interface. There is something fundamentally different
-about trusting a particular piece of code to be correct, and trusting *all the
-code that will ever be written* to be correct.
+С другой стороны, безопасные типажи могут свободно объявлять произвольные
+контракты, именно, потому что их реализация безопасна, небезопасный код же не
+может доверять тому, что эти контракты будут на самом деле соблюдаться. Это
+отличается от какого-то конкретного случая, потому что *любой человек* может
+реализовать интерфейс, как он хочет. В этом и состоит фундаментальная разница,
+доверять ли правильности конкретного участка кода или доверять правильности
+*любого кода, который будет когда либо написан*.
 
-For instance Rust has `PartialOrd` and `Ord` traits to try to differentiate
-between types which can "just" be compared, and those that actually implement a
-total ordering. Pretty much every API that wants to work with data that can be
-compared wants Ord data. For instance, a sorted map like BTreeMap
-*doesn't even make sense* for partially ordered types. If you claim to implement
-Ord for a type, but don't actually provide a proper total ordering, BTreeMap will
-get *really confused* and start making a total mess of itself. Data that is
-inserted may be impossible to find!
+Например, в Rust есть типажи `PartialOrd` и `Ord`, нужные для того, чтобы можно
+было отличить типы, которые можно "только" сравнивать, от тех, которые в
+действительности поддерживают упорядочивание. В большинстве своем, каждое API,
+которое хочет работать со сравнимыми данными, хочет иметь `Ord`. Например,
+упорядоченный словарь BTreeMap *не имеет никакого смысла* создавать для частично
+упорядоченных данных. Если вы объявите, что тип реализует `Ord`, но не
+предоставите данные в правильном порядке, BTreeMap *сядет в лужу* и начнет
+делать с собой разные плохие вещи. Вставленные данные будет уже невозможно
+найти!
 
-But that's okay. BTreeMap is safe, so it guarantees that even if you give it a
-completely garbage Ord implementation, it will still do something *safe*. You
-won't start reading uninitialized or unallocated memory. In fact, BTreeMap
-manages to not actually lose any of your data. When the map is dropped, all the
-destructors will be successfully called! Hooray!
+Но это еще нормально. BTreeMap безопасен, поэтому он гарантирует, что даже если
+вы дадите ему полностью несортированную реализацию, он будет все равно делать
+что-то *безопасное*. Вы не начнете читать неинициализированную или невыделенную
+память. На самом деле, BTreeMap не потеряет даже ваши данные. После его
+удаления, все деструкторы будут вызваны успешно! Ура!
 
-However BTreeMap is implemented using a modest spoonful of Unsafe Rust (most collections
-are). That means that it's not necessarily *trivially true* that a bad Ord
-implementation will make BTreeMap behave safely. BTreeMap must be sure not to rely
-on Ord *where safety is at stake*. Ord is provided by safe code, and safety is not
-safe code's responsibility to uphold.
+Однако BTreeMap реализован с использованием маленькой щепотки Небезопасного Rust
+(как и большинство коллекций). Это означает - не всегда правдиво будет
+утверждать, что реализация плохого порядка заставит вести себя BTreeMap
+безопасно. BTreeMap не должен полагаться на порядок, *ставя под угрозу
+безопасность*. Порядок предоставляется безопасным кодом, а безопасность это не
+то, за соблюдение чего отвечает безопасный код.
 
-But wouldn't it be grand if there was some way for Unsafe to trust some trait
-contracts *somewhere*? This is the problem that unsafe traits tackle: by marking
-*the trait itself* as unsafe to implement, unsafe code can trust the implementation
-to uphold the trait's contract. Although the trait implementation may be
-incorrect in arbitrary other ways.
+Но правда было бы здорово, если бы небезопасный код мог бы в *каких-нибудь
+местах* доверять контрактам типажа? Эта проблема, которой занимаются
+небезопасные типажи: помечая небезопасность реализации *самого типажа*,
+небезопасный код может доверять реализациям контракта типажа. Хотя она может и
+не быть правильной во всех произвольных случаях.
 
-For instance, given a hypothetical UnsafeOrd trait, this is technically a valid
-implementation:
+Например, имея гипотетический типаж UnsafeOrd, технически будет правильна такая
+реализация:
 
 ```rust
 # use std::cmp::Ordering;
@@ -122,7 +127,7 @@ unsafe impl UnsafeOrd for MyType {
 }
 ```
 
-But it's probably not the implementation you want.
+Но возможно это не та реализация, которая вам нужна.
 
 Rust has traditionally avoided making traits unsafe because it makes Unsafe
 pervasive, which is not desirable. The reason Send and Sync are unsafe is because thread
