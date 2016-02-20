@@ -1,66 +1,64 @@
-% Ownership and Lifetimes
+% Владение и время жизни
 
-Ownership is the breakout feature of Rust. It allows Rust to be completely
-memory-safe and efficient, while avoiding garbage collection. Before getting
-into the ownership system in detail, we will consider the motivation of this
-design.
+Владение - это пробивная особенность Rust. Оно позволяет Rust быть полностью
+безопасным по памяти и эффективным, избегая сборки мусора. Перед тем как
+детально разобрать систему владения, мы объясним предпосылки такого дизайна.
 
-We will assume that you accept that garbage collection (GC) is not always an
-optimal solution, and that it is desirable to manually manage memory in some
-contexts. If you do not accept this, might I interest you in a different
-language?
+Мы подразумеваем, что вы принимаете, что сборщик мусора - не всегда самое
+оптимальное решение, и что желательно в некоторых случаях управлять памятью
+вручную. Если вы это не принимаете, возможно вам стоит поискать другой язык?
 
-Regardless of your feelings on GC, it is pretty clearly a *massive* boon to
-making code safe. You never have to worry about things going away *too soon*
-(although whether you still wanted to be pointing at that thing is a different
-issue...). This is a pervasive problem that C and C++ programs need to deal
-with. Consider this simple mistake that all of us who have used a non-GC'd
-language have made at one point:
+Несмотря на ваши чувства к GC, он является *огромным* благом, позволяющим делать
+код безопасным. Вам не нужно волноваться никогда, что некоторые вещи удалятся
+*слишком рано* (хотя нужно ли вам по-прежнему иметь ссылку на них в этом случае
+это другой вопрос...). Это распространенная проблема, с которой приходится иметь
+дело программам на C и C++. Предположим, что каждый из нас, столкнувшись с
+языком без GC, совершал такую ошибку:
 
 ```rust,ignore
 fn as_str(data: &u32) -> &str {
     // compute the string
     let s = format!("{}", data);
 
-    // OH NO! We returned a reference to something that
-    // exists only in this function!
-    // Dangling pointer! Use after free! Alas!
-    // (this does not compile in Rust)
+    // О НЕТ! Мы возвращаем ссылку на что-то, 
+    // что существует только в этой функции!
+    // Висячий указатель! Используется после освобождения! Увы и ах!
+    // (Rust не компилирует этот код)
     &s
 }
 ```
 
-This is exactly what Rust's ownership system was built to solve.
-Rust knows the scope in which the `&s` lives, and as such can prevent it from
-escaping. However this is a simple case that even a C compiler could plausibly
-catch. Things get more complicated as code gets bigger and pointers get fed through
-various functions. Eventually, a C compiler will fall down and won't be able to
-perform sufficient escape analysis to prove your code unsound. It will consequently
-be forced to accept your program on the assumption that it is correct.
+Вот, что именно должна решать система владения в Rust. Rust знает область
+видимости, в которой живет `&s`, и поэтому не даст выйти из нее. Это простой
+случай, который даже компилятор C сможет правдоподобно поймать. Все становится
+сложнее, когда код растет и указатели передаются по различным функциям. В
+конечном счете, компилятор C сломается и не сможет выполнить анализ областей
+видимости, чтобы доказать, что ваш код сломан. Ему придется заставить себя
+принять вашу программу, предполагая что она правильна.
 
-This will never happen to Rust. It's up to the programmer to prove to the
-compiler that everything is sound.
+Это никогда не произойдет в Rust. Программисту нужно доказать компилятору, что
+ничего не сломается.
 
-Of course, Rust's story around ownership is much more complicated than just
-verifying that references don't escape the scope of their referent. That's
-because ensuring pointers are always valid is much more complicated than this.
-For instance in this code,
+Конечно, рассказ о владении в Rust гораздо сложней, чем просто проверка, что
+ссылка не выходит за область видимости того, на что она ссылается. Потому что
+доказать, что гарантированные указатели всегда правильны, гораздо сложнее, чем
+это. Например, в этом коде
 
 ```rust,ignore
 let mut data = vec![1, 2, 3];
-// get an internal reference
+// получаем внутреннюю ссылку
 let x = &data[0];
 
-// OH NO! `push` causes the backing storage of `data` to be reallocated.
-// Dangling pointer! User after free! Alas!
-// (this does not compile in Rust)
+// О НЕТ! `push` заставляет пересчитать занимаемое место `data`.
+// Висячий указатель! Используется после освобождения! Увы и ах!
+// (Rust не компилирует этот код)
 data.push(4);
 
 println!("{}", x);
 ```
 
-naive scope analysis would be insufficient to prevent this bug, because `data`
-does in fact live as long as we needed. However it was *changed* while we had
-a reference into it. This is why Rust requires any references to freeze the
-referent and its owners.
+обычный анализ областей видимости не сможет поймать эту ошибку, потому что
+`data` на самом деле живет столько, сколько надо. Но она *поменялась* в то
+время, когда у нас есть ссылка на нее. Вот поэтому Rust требует, чтобы любые
+ссылки замораживали объекты, на которые ссылаются, и владельцев этих объектов.
 
