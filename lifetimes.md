@@ -1,32 +1,32 @@
-% Lifetimes
+% Время жизни
 
-Rust enforces these rules through *lifetimes*. Lifetimes are effectively
-just names for scopes somewhere in the program. Each reference,
-and anything that contains a reference, is tagged with a lifetime specifying
-the scope it's valid for.
+Rust пропускает все правила через *время жизни*. Время жизни это просто название
+областей видимости где-то в программе. Каждая ссылка, или то, что содержит
+ссылки, помечается временем жизни, определяя область видимости, в которой она
+правильна.
 
-Within a function body, Rust generally doesn't let you explicitly name the
-lifetimes involved. This is because it's generally not really necessary
-to talk about lifetimes in a local context; Rust has all the information and
-can work out everything as optimally as possible. Many anonymous scopes and
-temporaries that you would otherwise have to write are often introduced to
-make your code Just Work.
+Внутри тела функции Rust обычно не позволяет вам явно назвать время жизни.
+Потому что в общем случае в локальном контексте нет смысла говорить о времени
+жизни; Rust обладает всей информацией и может обработать все достаточно
+оптимально. Иначе вам пришлось бы создавать много анонимных областей и временных
+переменных, просто чтобы заставить ваш код работать.
 
-However once you cross the function boundary, you need to start talking about
-lifetimes. Lifetimes are denoted with an apostrophe: `'a`, `'static`. To dip
-our toes with lifetimes, we're going to pretend that we're actually allowed
-to label scopes with lifetimes, and desugar the examples from the start of
-this chapter.
+Но, когда вы переходите границы тела функции, вы должны начать говорить о
+времени жизни. Время жизни обозначаются апострофам: `'a`, `'static`. Чтобы
+окунуться во время жизни, мы сделаем вид, что нам разрешено помечать области
+видимости временем жизни, и разберем пример из начала этой главы.
 
-Originally, our examples made use of *aggressive* sugar -- high fructose corn
-syrup even -- around scopes and lifetimes, because writing everything out
-explicitly is *extremely noisy*. All Rust code relies on aggressive inference
-and elision of "obvious" things.
+Изначально, наши примеры созданы с использованием *сильного* синтаксического
+сахара -- с кукурузным сироп с высоким содержанием фруктозы -- это касается
+областей видимости и времен жизни, потому что написание всего этого в явной форме
+*сильно замусоривает* код. Весь код Rust опирается на агрессивный вывод и элизию
+"очевидных" вещей.
 
-One particularly interesting piece of sugar is that each `let` statement implicitly
-introduces a scope. For the most part, this doesn't really matter. However it
-does matter for variables that refer to each other. As a simple example, let's
-completely desugar this simple piece of Rust code:
+Первым особо интересным кусочком сахара является то, что каждое утверждение
+`let` неявно объявляет область видимости. Для большинства случаев это абсолютно
+не важно. Но это очень важно, когда переменные ссылаются друг на друга. Для
+простого примера, давайте полностью избавимся от сахара в этом куске кода на
+Rust:
 
 ```rust
 let x = 0;
@@ -34,28 +34,29 @@ let y = &x;
 let z = &y;
 ```
 
-The borrow checker always tries to minimize the extent of a lifetime, so it will
-likely desugar to the following:
+Анализатор заимствований всегда пытается минимизировать величину времени жизни,
+поэтому скорее всего после избавления от сахара пример будет выглядеть так:
 
 ```rust,ignore
-// NOTE: `'a: {` and `&'b x` is not valid syntax!
+// Внимание: `'a: {` и `&'b x` это неправильный синтаксис!
 'a: {
     let x: i32 = 0;
     'b: {
-        // lifetime used is 'b because that's good enough.
+        // используемое время жизни 'b потому что его достаточно.
         let y: &'b i32 = &'b x;
         'c: {
-            // ditto on 'c
+            // то же самое с 'c
             let z: &'c &'b i32 = &'c y;
         }
     }
 }
 ```
 
-Wow. That's... awful. Let's all take a moment to thank Rust for making this easier.
+Ух ты! Это... ужасно. Давайте здесь остановимся и поблагодарим Rust за то, что
+делает это проще.
 
-Actually passing references to outer scopes will cause Rust to infer
-a larger lifetime:
+На самом деле передача ссылок наружу из области видимости заставит Rust вывести
+большее время жизни:
 
 ```rust
 let x = 0;
@@ -70,8 +71,8 @@ z = y;
     'b: {
         let z: &'b i32;
         'c: {
-            // Must use 'b here because this reference is
-            // being passed to that scope.
+            // Нужно использовать 'b здесь, потому что ссылка
+            // передается снаружи в эту область видимости.
             let y: &'b i32 = &'b x;
             z = y;
         }
@@ -81,9 +82,9 @@ z = y;
 
 
 
-# Example: references that outlive referents
+# Пример: ссылки, которые переживают то, на что ссылаются
 
-Alright, let's look at some of those examples from before:
+Отлично, давайте теперь посмотрим на некоторые примеры из тех, что были раньше:
 
 ```rust,ignore
 fn as_str(data: &u32) -> &str {
@@ -92,7 +93,7 @@ fn as_str(data: &u32) -> &str {
 }
 ```
 
-desugars to:
+убрав сахар, получаем:
 
 ```rust,ignore
 fn as_str<'a>(data: &'a u32) -> &'a str {
@@ -103,23 +104,22 @@ fn as_str<'a>(data: &'a u32) -> &'a str {
 }
 ```
 
-This signature of `as_str` takes a reference to a u32 with *some* lifetime, and
-promises that it can produce a reference to a str that can live *just as long*.
-Already we can see why this signature might be trouble. That basically implies
-that we're going to find a str somewhere in the scope the reference
-to the u32 originated in, or somewhere *even earlier*. That's a bit of a tall
-order.
+Сигнатура `as_str` берет ссылку на u32 с *каким-то* временем жизни, и обещает
+создать ссылку на str, которая сможет жить *столько, сколько надо*. Мы уже
+видели, почему такая сигнатура вызывает проблемы. Подразумевается, в принципе,
+что мы собираемся использовать str в области видимости, в которой возникла
+ссылка на u32 или *в еще большей области видимости*. Это уже задача потруднее.
 
-We then proceed to compute the string `s`, and return a reference to it. Since
-the contract of our function says the reference must outlive `'a`, that's the
-lifetime we infer for the reference. Unfortunately, `s` was defined in the
-scope `'b`, so the only way this is sound is if `'b` contains `'a` -- which is
-clearly false since `'a` must contain the function call itself. We have therefore
-created a reference whose lifetime outlives its referent, which is *literally*
-the first thing we said that references can't do. The compiler rightfully blows
-up in our face.
+Мы вычисляем строку `s`, и возвращаем ссылку на нее. По контракту нашей функции
+ссылка должна пережить `'a`, поэтому это время жизни мы и подставим для нее. К
+сожалению, `s` была определена в области видимости `'b`, поэтому единственный
+вариант этого, если `'b` содержит `'a` -- что, очевидно, быть не может, ведь во
+время жизни `'a` должен входить сам вызов функции. Таким образом мы создали
+ссылку, чье время жизни превосходит время жизни того, на что она ссылается, а
+это *буквально* первое, что мы сказали, что ссылки делать не могут. Компилятор
+по праву взрывается перед нашими глазами.
 
-To make this more clear, we can expand the example:
+Для лучшего объяснения расширим пример:
 
 ```rust,ignore
 fn as_str<'a>(data: &'a u32) -> &'a str {
@@ -133,19 +133,19 @@ fn main() {
     'c: {
         let x: u32 = 0;
         'd: {
-            // An anonymous scope is introduced because the borrow does not
-            // need to last for the whole scope x is valid for. The return
-            // of as_str must find a str somewhere before this function
-            // call. Obviously not happening.
+            // Анонимная область видимости создается, потому что заимствование 
+            // не должно продолжаться столько же сколько, сколько вся область  
+            // видимости x. Возврат as_str должен найти str где-то раньше вызова
+            // этой функции. Очевидно, что этого не произойдет.
             println!("{}", as_str::<'d>(&'d x));
         }
     }
 }
 ```
 
-Shoot!
+Выстрел!
 
-Of course, the right way to write this function is as follows:
+Конечно, правильно будет написать эту функцию так:
 
 ```rust
 fn to_string(data: &u32) -> String {
@@ -153,21 +153,20 @@ fn to_string(data: &u32) -> String {
 }
 ```
 
-We must produce an owned value inside the function to return it! The only way
-we could have returned an `&'a str` would have been if it was in a field of the
-`&'a u32`, which is obviously not the case.
+Мы можем создать обладаемое значение внутри функции, чтобы вернуть его!
+Единственным способом, как мы могли бы вернуть `&'a str`, оно должно входить
+в поле `&'a u32`, но это явно не наш случай.
 
-(Actually we could have also just returned a string literal, which as a global
-can be considered to reside at the bottom of the stack; though this limits
-our implementation *just a bit*.)
-
+(Вообще, мы могли бы просто вернуть литеральную строку, которая, являясь
+глобалом, живет на дне стека; хотя это ограничит нашу реализацию *немного*.)
 
 
 
 
-# Example: aliasing a mutable reference
 
-How about the other example:
+# Пример: совпадение указателей у изменяемой ссылки
+
+Как насчет другого примера:
 
 ```rust,ignore
 let mut data = vec![1, 2, 3];
@@ -180,12 +179,12 @@ println!("{}", x);
 'a: {
     let mut data: Vec<i32> = vec![1, 2, 3];
     'b: {
-        // 'b is as big as we need this borrow to be
-        // (just need to get to `println!`)
+        // 'b длится столько, сколько нам нужно, чтобы длилось заимствование
+        // (достаточно, чтобы добраться до  `println!`)
         let x: &'b i32 = Index::index::<'b>(&'b data, 0);
         'c: {
-            // Temporary scope because we don't need the
-            // &mut to last any longer.
+            // Временная область нужна, поскольку мы не хотим чтобы
+            // &mut жила дольше.
             Vec::push(&'c mut data, 4);
         }
         println!("{}", x);
@@ -193,23 +192,24 @@ println!("{}", x);
 }
 ```
 
-The problem here is a bit more subtle and interesting. We want Rust to
-reject this program for the following reason: We have a live shared reference `x`
-to a descendant of `data` when we try to take a mutable reference to `data`
-to `push`. This would create an aliased mutable reference, which would
-violate the *second* rule of references.
+Проблема здесь чуть тоньше и интересней. Мы хотим, чтобы Rust не принял эту
+программу по следующей причине: у нас есть живая общая ссылка `x` на потомок
+`data` в то время, когда мы пытаемся взять `data` как изменяемую ссылку и
+выполнить `push`. Это приведет к созданию совпадающего указателя на изменяемую
+ссылку, что нарушает *второе* правило ссылок.
 
-However this is *not at all* how Rust reasons that this program is bad. Rust
-doesn't understand that `x` is a reference to a subpath of `data`. It doesn't
-understand Vec at all. What it *does* see is that `x` has to live for `'b` to
-be printed. The signature of `Index::index` subsequently demands that the
-reference we take to `data` has to survive for `'b`. When we try to call `push`,
-it then sees us try to make an `&'c mut data`. Rust knows that `'c` is contained
-within `'b`, and rejects our program because the `&'b data` must still be live!
+Однако, *совсем не по этой причине* Rust считает, что программа неверна. Rust не
+понимает, что  `x` - это ссылка на под-путь к `data`. Он абсолютно не понимает
+Vec. Все, что он *видит*, это то, что `x` должен жить время `'b`, чтобы
+его можно было напечатать. Дальше сигнатура `Index::index` требует, чтобы ссылка
+по которой мы берем `data`, была живой в течение времени `'b`.  Когда мы
+пытаемся вызвать `push`, компилятор видит, что мы пытаемся сделать `&'c mut
+data`. Rust знает, что  `'c` содержится внутри `'b`, и отказывается принимать
+нашу программу, потому что `&'b data` все еще жива к этому моменту!
 
-Here we see that the lifetime system is much more coarse than the reference
-semantics we're actually interested in preserving. For the most part, *that's
-totally ok*, because it keeps us from spending all day explaining our program
-to the compiler. However it does mean that several programs that are totally
-correct with respect to Rust's *true* semantics are rejected because lifetimes
-are too dumb.
+Мы видим, что система времен жизни гораздо грубее, чем ссылочная семантика, в
+сохранении которой мы на самом деле заинтересованы. Для большинства случаев,
+*так совершенно нормально*, потому что позволяет не проводить целый день,
+объясняя нашу программу компилятору. Но это не означает, что некоторые абсолютно
+правильные по семантике программы будут отвергнуты, из-за того что система
+времен жизни слишком глупа.
