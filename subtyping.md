@@ -1,80 +1,86 @@
-% Subtyping and Variance
+% Подтипы и вариативность
 
-Although Rust doesn't have any notion of structural inheritance, it *does*
-include subtyping. In Rust, subtyping derives entirely from lifetimes. Since
-lifetimes are scopes, we can partially order them based on the *contains*
-(outlives) relationship. We can even express this as a generic bound.
+Хотя в Rust не входят никакие средства структурного наследования, он *включает*
+в себя выделение подтипов. В Rust выделение подтипов полностью вытекает из
+времен жизни. Благодаря временам жизни и областям видимости мы можем частично
+упорядочить выделение подтипов в виде отношений *содержания* (дольшего
+существования). Мы даже можем выразить это в виде обобщенной границы.
 
-Subtyping on lifetimes is in terms of that relationship: if `'a: 'b` ("a contains
-b" or "a outlives b"), then `'a` is a subtype of `'b`. This is a large source of
-confusion, because it seems intuitively backwards to many: the bigger scope is a
-*subtype* of the smaller scope.
+Выделение подтипов по временам жизни в терминах таких отношений будет
+следующим: если `'a: 'b` ("a содержит b" или "a живет дольше, чем b"), то `'a`
+является подтипом `'b`. Здесь существует огромная вероятность ошибиться, потому
+что интуитивно кажется, что должно быть наоборот: большая область видимости
+является *подтипом* меньшей.
 
-This does in fact make sense, though. The intuitive reason for this is that if
-you expect an `&'a u8`, then it's totally fine for me to hand you an `&'static
-u8`, in the same way that if you expect an Animal in Java, it's totally fine for
-me to hand you a Cat. Cats are just Animals *and more*, just as `'static` is
-just `'a` *and more*.
+Хотя на самом деле в этом есть смысл. Интуитивная причина этого - если вы
+ожидаете `&'a u8`, то вполне нормально передать вам `&'static u8`,  так же как
+если бы вы ожидали Животного в Java, то было бы нормально передать вам Кошку.
+Кошка - это Животное *и кое-что еще*, также как `'static` это просто `'a` *и кое-
+что еще*.
 
-(Note, the subtyping relationship and typed-ness of lifetimes is a fairly
-arbitrary construct that some disagree with. However it simplifies our analysis
-to treat lifetimes and types uniformly.)
+(Помните, что отношения подтипов и типизация времен жизни - это довольно
+произвольная конструкция, с которой некоторые не соглашаются. Однако она
+прилично упрощает нам жизнь в части анализа времен жизни.)
 
-Higher-ranked lifetimes are also subtypes of every concrete lifetime. This is
-because taking an arbitrary lifetime is strictly more general than taking a
-specific one.
-
-
-
-# Variance
-
-Variance is where things get a bit complicated.
-
-Variance is a property that *type constructors* have with respect to their
-arguments. A type constructor in Rust is a generic type with unbound arguments.
-For instance `Vec` is a type constructor that takes a `T` and returns a
-`Vec<T>`. `&` and `&mut` are type constructors that take two inputs: a
-lifetime, and a type to point to.
-
-A type constructor's *variance* is how the subtyping of its inputs affects the
-subtyping of its outputs. There are two kinds of variance in Rust:
-
-* F is *variant* over `T` if `T` being a subtype of `U` implies
-  `F<T>` is a subtype of `F<U>` (subtyping "passes through")
-* F is *invariant* over `T` otherwise (no subtyping relation can be derived)
-
-(For those of you who are familiar with variance from other languages, what we
-refer to as "just" variance is in fact *covariance*. Rust has *contravariance*
-for functions. The future of contravariance is uncertain and it may be
-scrapped. For now, `fn(T)` is contravariant in `T`, which is used in matching
-methods in trait implementations to the trait definition. Traits don't have
-inferred variance, so `Fn(T)` is invariant in `T`).
-
-Some important variances:
-
-* `&'a T` is variant over `'a` and `T` (as is `*const T` by metaphor)
-* `&'a mut T` is variant with over `'a` but invariant over `T`
-* `Fn(T) -> U` is invariant over `T`, but variant over `U`
-* `Box`, `Vec`, and all other collections are variant over the types of
-  their contents
-* `UnsafeCell<T>`, `Cell<T>`, `RefCell<T>`, `Mutex<T>` and all other
-  interior mutability types are invariant over T (as is `*mut T` by metaphor)
-
-To understand why these variances are correct and desirable, we will consider
-several examples.
+Высокоуровневые времена жизни - это тоже подтипы каждого конкретного времени
+жизни. Так происходит, потому что произвольное время жизни, строго говоря,
+больше, чем какое-либо конкретное время жизни.
 
 
-We have already covered why `&'a T` should be variant over `'a` when
-introducing subtyping: it's desirable to be able to pass longer-lived things
-where shorter-lived things are needed.
 
-Similar reasoning applies to why it should be variant over T. It is reasonable
-to be able to pass `&&'static str` where an `&&'a str` is expected. The
-additional level of indirection does not change the desire to be able to pass
-longer lived things where shorted lived things are expected.
+# Вариантность
 
-However this logic doesn't apply to `&mut`. To see why `&mut` should
-be invariant over T, consider the following code:
+Вот где вещи становятся немного сложнее.
+
+Вариантность - это то, как *конструкторы типа* относятся к своим аргументам.
+Конструктор типа в Rust - это обобщенный тип с безграничным размером аргументов.
+Например `Vec` - это конструктор типа, который принимает на входе `T` и
+возвращает `Vec<T>`. `&` и `&mut` - это конструкторы типа, которые принимают 2
+аргумента на входе: время жизни и тип, на который указывать.
+
+*Вариантность* конструктора типа - это, как выделение подтипов из аргументов на 
+входе влияет на выделение подтипов на выходе. В Rust присутствуют два типа 
+вариантности:
+
+* F *вариантна* над `T` если для `T`, являющегося подтипом `U`,  
+считается правдой, что `F<T>` является подтипом `F<U>` (выделение подтипов 
+"проходит")
+* F *инвариантна* над `T` в противном случае (нельзя выделить 
+отношений подтипов)
+
+(Для тех, кто сталкивался с вариативностью в других языках - то, что мы относим
+к "просто" вариантности, на самом деле является *ковариантностью*. У Rust есть
+*контрвариантность* для функций. Будущее контрвариантности не определено еще и
+она может быть выпилена. На данный момент, `fn(T)` контравариантна к `T`, и
+используется в методах поиска совпадения с определением типажей для их
+реализаций. У типажей нет подразумеваемой вариантности, поэтому `Fn(T)`
+инвариантна к `T`).
+
+Некоторые важные вариантности:
+
+* `&'a T` вариантна над `'a` и `T` (как и метафорически `*const T`)
+* `&'a mut T` вариантна над `'a`, но инвариантна над `T`
+* `Fn(T) -> U` инвариантна над `T`, но вариантна над `U`
+* `Box`, `Vec` и другие коллекции над типами их содержимого
+* `UnsafeCell<T>`, `Cell<T>`, `RefCell<T>`, `Mutex<T>` и другие типы с 
+внутренней изменяемостью инвариантны над T (как и метафорически `*mut T`)
+
+Чтобы понять, почему эти вариантности правильны и важны рассмотрим несколько
+примеров.
+
+
+Мы уже рассматривали, почему `&'a T` должна быть вариантна над `'a`, когда
+представляли выделение подтипов: желательно иметь возможность передавать что-то
+с большим временем жизни туда, где ожидается что-то с более коротким временем
+жизни.
+
+По похожей причине должна быть вариантность над T. Разумно иметь возможность
+передавать `&&'static str` где ожидается `&&'a str`. Дополнительный уровень
+косвенности не меняет желание иметь возможность передавать что-то с большим
+временем жизни туда, где ожидается что-то с более коротким временем жизни.
+
+Однако, эта логика не применима к `&mut`. Для того, чтобы понять почему `&mut`
+должна быть инвариантна над T, возьмем следующий код:
 
 ```rust,ignore
 fn overwrite<T: Copy>(input: &mut T, new: &mut T) {
@@ -87,127 +93,128 @@ fn main() {
         let string = String::from("world");
         overwrite(&mut forever_str, &mut &*string);
     }
-    // Oops, printing free'd memory
+    // Упс, печать освобожденной памяти
     println!("{}", forever_str);
 }
 ```
 
-The signature of `overwrite` is clearly valid: it takes mutable references to
-two values of the same type, and overwrites one with the other. If `&mut T` was
-variant over T, then `&mut &'static str` would be a subtype of `&mut &'a str`,
-since `&'static str` is a subtype of `&'a str`. Therefore the lifetime of
-`forever_str` would successfully be "shrunk" down to the shorter lifetime of
-`string`, and `overwrite` would be called successfully. `string` would
-subsequently be dropped, and `forever_str` would point to freed memory when we
-print it! Therefore `&mut` should be invariant.
+Сигнатура `overwrite` абсолютна правильна: она берет изменяемую ссылку на два
+значения одного типа и переписывает одно в другое. Если `&mut T` была бы
+вариантна над T, то `&mut &'static str` была бы подтипом `&mut &'a str` из-за
+того, что `&'static str` является подтипом `&'a str`. Таким образом время жизни
+`forever_str` успешно "усохло" бы до более короткого времени жизни `string` и
+`overwrite` бы успешно вызвалось. `string` впоследствии бы уничтожилось и
+`forever_str` указывало бы на освобожденную память, когда мы вызвали печать!
+Таким образом `&mut` должна быть инвариантна.
 
-This is the general theme of variance vs invariance: if variance would allow you
-to store a short-lived value into a longer-lived slot, then you must be
-invariant.
+Это основная тема в вариантности против инвариантности: если вариантность
+позволит хранить коротко живущее значение в долго живущей ячейке памяти, то вы
+должны быть инвариантны.
 
-However it *is* sound for `&'a mut T` to be variant over `'a`. The key difference
-between `'a` and T is that `'a` is a property of the reference itself,
-while T is something the reference is borrowing. If you change T's type, then
-the source still remembers the original type. However if you change the
-lifetime's type, no one but the reference knows this information, so it's fine.
-Put another way: `&'a mut T` owns `'a`, but only *borrows* T.
+Однако для `&'a mut T` правильно быть вариантным над `'a`. Основное отличие
+между `'a` и T - `'a` является свойством самой ссылки, в то время как T - это
+что-то, что захватило ссылку. Если вы поменяете тип T, то источник будет все
+еще помнить оригинальный тип. Но если вы поменяете время жизни типа, никто кроме
+ссылки не узнает эту информацию, поэтому все в порядке. Говоря по другому: `&'a
+mut T` владеет `'a`, но только *заимствует* T.
 
-`Box` and `Vec` are interesting cases because they're variant, but you can
-definitely store values in them! This is where Rust gets really clever: it's
-fine for them to be variant because you can only store values
-in them *via a mutable reference*! The mutable reference makes the whole type
-invariant, and therefore prevents you from smuggling a short-lived type into
-them.
+`Box` и `Vec` являются интересными случаями, потому что они вариантны, но вы, 
+определенно, можете хранить значения в них! Вот именно тут Rust становится 
+особенно умным: для них нормально быть вариантными, потому что вы можете хранить
+ значения в них только *по средствам изменяемой ссылки*! Изменяемая ссылка 
+ делает весь тип инвариантным и поэтому не позволяет перевезти коротко-живущие 
+ значения контрабандой в них.
 
-Being variant allows `Box` and `Vec` to be weakened when shared
-immutably. So you can pass a `&Box<&'static str>` where a `&Box<&'a str>` is
-expected.
+Вариантность позволяет `Box` и `Vec` ослаблять условия общей изменяемости.
+Поэтому вы можете передать `&Box<&'static str>` туда , где ожидается `&Box<&'a
+str>`.
 
-However what should happen when passing *by-value* is less obvious. It turns out
-that, yes, you can use subtyping when passing by-value. That is, this works:
+Но то, что происходит, если идет передача *по значению*, гораздо менее очевидно.
+Выясняется, что, да, вы можете выделять подтипы при передачи по значению. Вот
+как это работает:
 
 ```rust
 fn get_box<'a>(str: &'a str) -> Box<&'a str> {
-    // string literals are `&'static str`s
+    // строковые литералы являются `&'static str`
     Box::new("hello")
 }
 ```
 
-Weakening when you pass by-value is fine because there's no one else who
-"remembers" the old lifetime in the Box. The reason a variant `&mut` was
-trouble was because there's always someone else who remembers the original
-subtype: the actual owner.
+Ослабление при передаче по значению нормально проходит, потому что нет никого,
+кто бы "помнил" старое время жизни в Box. Причина, по которая вариантность
+`&mut` была проблемой, существовала, потому что всегда был кто-то, кто помнил
+оригинальный под-тип: действующий владелец.
 
-The invariance of the cell types can be seen as follows: `&` is like an `&mut`
-for a cell, because you can still store values in them through an `&`. Therefore
-cells must be invariant to avoid lifetime smuggling.
+Инвариантность типов ячеек можно объяснить так: `&` похожа на `&mut` для ячеек,
+потому что вы можете менять значение в них по средствам `&`. Поэтом ячейки
+должны быть инвариантны, чтобы избежать незаконного ввоза времени жизни.
 
-`Fn` is the most subtle case because it has mixed variance. To see why
-`Fn(T) -> U` should be invariant over T, consider the following function
-signature:
+`Fn` - это самый тонкий случай, потому что у него смешанное вариантность. Чтобы
+ понять почему `Fn(T) -> U` должна быть инвариантна над T, создадим следующую 
+ сигнатуру функции:
 
 ```rust,ignore
-// 'a is derived from some parent scope
+// 'a получается из родительской области видимости
 fn foo(&'a str) -> usize;
 ```
 
-This signature claims that it can handle any `&str` that lives at least as
-long as `'a`. Now if this signature was variant over `&'a str`, that
-would mean
+Эта сигнатура утверждает, что может принять любую `&str`, которая живет столько
+же, сколько по меньшей мере `'a`. Теперь, если бы эта сигнатура были вариантна
+над `&'a str`, это означало бы, что
 
 ```rust,ignore
 fn foo(&'static str) -> usize;
 ```
 
-could be provided in its place, as it would be a subtype. However this function
-has a stronger requirement: it says that it can only handle `&'static str`s,
-and nothing else. Giving `&'a str`s to it would be unsound, as it's free to
-assume that what it's given lives forever. Therefore functions are not variant
-over their arguments.
+можно подставить в это место, так как она является под-типом. Но у этой функции
+требования строже: она утверждает, что может принимать только `&'static str` и
+ничего кроме. Невозможно было бы дать ей `&'a str`, потому что она свободно
+могла бы предположить, что то, что ей дали, должно жить вечно. Поэтому функции
+инвариантны над своими аргументами.
 
-To see why `Fn(T) -> U` should be variant over U, consider the following
-function signature:
+Чтобы понять, почему `Fn(T) -> U` должна быть вариантна над U, создадим следующую 
+ сигнатуру функции:
 
 ```rust,ignore
-// 'a is derived from some parent scope
+// 'a получается из родительской области видимости
 fn foo(usize) -> &'a str;
 ```
 
-This signature claims that it will return something that outlives `'a`. It is
-therefore completely reasonable to provide
+Эта сигнатура утверждает, что вернет что-то, что будет жить дольше, чем `'a`.
+Поэтому абсолютно разумно подставить
 
 ```rust,ignore
 fn foo(usize) -> &'static str;
 ```
 
-in its place. Therefore functions are variant over their return type.
+на ее место. Поэтому функции вариантны над своим возвращаемым типом.
 
-`*const` has the exact same semantics as `&`, so variance follows. `*mut` on the
-other hand can dereference to an `&mut` whether shared or not, so it is marked
-as invariant just like cells.
+У `*const` такая же семантика как и у `&`, из чего следует и вариантность. С
+другой стороны `*mut` можно разыменовать в `&mut`, как общую,так и нет, поэтому
+она помечена как инвариантная, также как ячейки.
 
-This is all well and good for the types the standard library provides, but
-how is variance determined for type that *you* define? A struct, informally
-speaking, inherits the variance of its fields. If a struct `Foo`
-has a generic argument `A` that is used in a field `a`, then Foo's variance
-over `A` is exactly `a`'s variance. However this is complicated if `A` is used
-in multiple fields.
+Все это хорошо для типов из стандартной библиотеки, но как вариантность
+вычисляется для типов, которые определили *вы*? Структуры, говоря неформально,
+наследуют вариантность своих полей. Если у структуры `Foo` есть обобщенный
+аргумент `A`, который используется в поле `a`, то вариантность Foo над `A` будет
+совпадать с вариантностью `a`. Это усложняется, если `A` используется в
+нескольких полях.
 
-* If all uses of A are variant, then Foo is variant over A
-* Otherwise, Foo is invariant over A
+* Если все использования A вариантны, то Foo вариантна над A
+* Иначе, Foo инвариантна над A
 
 ```rust
 use std::cell::Cell;
 
 struct Foo<'a, 'b, A: 'a, B: 'b, C, D, E, F, G, H> {
-    a: &'a A,     // variant over 'a and A
-    b: &'b mut B, // variant over 'b and invariant over B
-    c: *const C,  // variant over C
-    d: *mut D,    // invariant over D
-    e: Vec<E>,    // variant over E
-    f: Cell<F>,   // invariant over F
-    g: G,         // variant over G
-    h1: H,        // would also be variant over H except...
-    h2: Cell<H>,  // invariant over H, because invariance wins
+    a: &'a A,     // вариантна над 'a и A
+    b: &'b mut B, // вариантна над 'b и инвариантна над B
+    c: *const C,  // вариантна над C
+    d: *mut D,    // инвариантна над D
+    e: Vec<E>,    // вариантна над E
+    f: Cell<F>,   // инвариантна над F
+    g: G,         // вариантна над G
+    h1: H,        // была бы вариантна над H если бы не...
+    h2: Cell<H>,  // была бы инвариантна над H, потому что инвариантность побеждает
 }
 ```
