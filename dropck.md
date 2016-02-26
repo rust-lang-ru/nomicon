@@ -1,12 +1,12 @@
-% Drop Check
+% Проверка удаления
 
-We have seen how lifetimes provide us some fairly simple rules for ensuring
-that we never read dangling references. However up to this point we have only ever
-interacted with the *outlives* relationship in an inclusive manner. That is,
-when we talked about `'a: 'b`, it was ok for `'a` to live *exactly* as long as
-`'b`. At first glance, this seems to be a meaningless distinction. Nothing ever
-gets dropped at the same time as another, right? This is why we used the
-following desugaring of `let` statements:
+Мы посмотрели как время жизни представляют нам простые правила, гарантирующие
+что мы никогда не прочитаем висячий указатель. Однако до этого момента мы только
+имели дело с живущими дольше отношениями во включающей форме. То есть,когда мы
+говорили о `'a: 'b`, было в порядке вещей для `'a` жить *ровно* столько же
+сколько `'b`. На первый взгляд, различие кажется бессмысленным. Ничего же не
+удаляется одновременно с другим, правда? Вот почему мы используем утверждение
+`let` без синтаксического сахара следующим образом:
 
 ```rust,ignore
 let x;
@@ -22,28 +22,28 @@ let y;
 }
 ```
 
-Each creates its own scope, clearly establishing that one drops before the
-other. However, what if we do the following?
+Каждое создает свою область видимости, ясно утверждая, что одно удаляется после
+другого. Но, что если мы сделаем так?
 
 ```rust,ignore
 let (x, y) = (vec![], vec![]);
 ```
 
-Does either value strictly outlive the other? The answer is in fact *no*,
-neither value strictly outlives the other. Of course, one of x or y will be
-dropped before the other, but the actual order is not specified. Tuples aren't
-special in this regard; composite structures just don't guarantee their
-destruction order as of Rust 1.0.
+Живет ли одно значение дольше другого? Ответ, *нет*, ни одно значение не живет
+дольше другого. Конечно, или x или y удалиться после другого, но сам порядок не
+указан. Кортежи не одиноки в этом вопросе; составные структуры тоже не
+гарантируют порядок своего удаления, начиная с Rust 1.0.
 
-We *could* specify this for the fields of built-in composites like tuples and
-structs. However, what about something like Vec? Vec has to manually drop its
-elements via pure-library code. In general, anything that implements Drop has
-a chance to fiddle with its innards during its final death knell. Therefore
-the compiler can't sufficiently reason about the actual destruction order
-of the contents of any type that implements Drop.
+Мы *могли бы* указать его для полей встроенных составных объектов, как кортежи
+или структуры. Но, что насчет чего-то похожего на Vec? Vec приходится вручную
+удалять элементы по средствам кода из библиотеки. В общем случае, все, что
+реализует Drop, имеет возможность повозиться со своими внутренностями во время
+похоронного звона. Поэтому компилятор не может достаточно точно определить
+порядок удаления типа, реализующего Drop.
 
-So why do we care? We care because if the type system isn't careful, it could
-accidentally make dangling pointers. Consider the following simple program:
+Ну а нам то какая разница? Это важно, потому что если система типов будет
+неаккуратна, она может случайно создать висячий указатель. Предположим, что у
+нас есть следующая программа:
 
 ```rust
 struct Inspector<'a>(&'a u8);
@@ -55,11 +55,10 @@ fn main() {
 }
 ```
 
-This program is totally sound and compiles today. The fact that `days` does
-not *strictly* outlive `inspector` doesn't matter. As long as the `inspector`
-is alive, so is days.
+Программа абсолютно правильна и компилируется сегодня. Тот факт, что `days` не
+живет *строго дольше* `inspector` не важен. Пока жив `inspector`, живы и days.
 
-However if we add a destructor, the program will no longer compile!
+Но если мы добавим деструктор, программа больше не будет компилироваться!
 
 ```rust,ignore
 struct Inspector<'a>(&'a u8);
@@ -74,8 +73,8 @@ fn main() {
     let (inspector, days);
     days = Box::new(1);
     inspector = Inspector(&days);
-    // Let's say `days` happens to get dropped first.
-    // Then when Inspector is dropped, it will try to read free'd memory!
+    // Предположим, что `days` удалилась первой.
+    // Когда Inspector будет удаляться, он попытается прочитать освобожденную память!
 }
 ```
 
