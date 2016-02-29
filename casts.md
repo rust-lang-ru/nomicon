@@ -1,30 +1,31 @@
-% Casts
+% Явное приведение типа
 
-Casts are a superset of coercions: every coercion can be explicitly
-invoked via a cast. However some conversions require a cast.
-While coercions are pervasive and largely harmless, these "true casts"
-are rare and potentially dangerous. As such, casts must be explicitly invoked
-using the `as` keyword: `expr as Type`.
+Явное приведение - это надстройка над неявным приведением: каждое неявное
+приведение можно вызвать по средствам явного приведения. Некоторые
+преобразования типов требуют явного приведения. В то время как неявные
+приведения распространены и в основном безвредны, эти "настоящие явные
+приведения типов" редки и потенциально опасны. Поэтому, явные приведения должны
+явно вызываться с помощью ключевого слова `as`: `expr as Type`.
 
-True casts generally revolve around raw pointers and the primitive numeric
-types. Even though they're dangerous, these casts are infallible at runtime.
-If a cast triggers some subtle corner case no indication will be given that
-this occurred. The cast will simply succeed. That said, casts must be valid
-at the type level, or else they will be prevented statically. For instance,
-`7u8 as bool` will not compile.
+Настоящие явные приведения обычно крутятся вокруг сырых указателей и примитивных
+числовых типов. Даже при том, что они опасны, эти приведения надежны во время
+выполнения. Если явное приведение инициирует какой-то тонкий случай, никакого
+признака этому не возникнет. Явное приведение просто выполнится. Исходя из
+этого, явные приведения должны быть правильны на уровне типов, или они будут
+статически отменены. Например, `7u8 as bool` не компилируется.
 
-That said, casts aren't `unsafe` because they generally can't violate memory
-safety *on their own*. For instance, converting an integer to a raw pointer can
-very easily lead to terrible things. However the act of creating the pointer
-itself is safe, because actually using a raw pointer is already marked as
-`unsafe`.
+Поэтому явные приведения не `unsafe`, потому что они вообще не могут нарушить
+безопасность памяти *сами по себе*. Например, преобразование целого в сырой
+указатель может легко привести к ужасным вещам. Но само действие по созданию
+указателя безопасно, потому что на самом деле использование сырого указателя уже
+помечено `unsafe`.
 
-Here's an exhaustive list of all the true casts. For brevity, we will use `*`
-to denote either a `*const` or `*mut`, and `integer` to denote any integral
-primitive:
+Вот полный список всех правильных явных приведений. Для краткости используем `*`,
+чтобы обозначить `*const` или  `*mut` и `integer` - для любого целого
+примитива:
 
- * `*T as *U` where `T, U: Sized`
- * `*T as *U` TODO: explain unsized situation
+ * `*T as *U` где `T, U: Sized`
+ * `*T as *U` TODO: объяснить ситуацию с безразмерными типами
  * `*T as integer`
  * `integer as *T`
  * `number as number`
@@ -33,38 +34,38 @@ primitive:
  * `char as integer`
  * `u8 as char`
  * `&[T; n] as *const T`
- * `fn as *T` where `T: Sized`
+ * `fn as *T` где `T: Sized`
  * `fn as integer`
 
-Note that lengths are not adjusted when casting raw slices -
-`*const [u16] as *const [u8]` creates a slice that only includes
-half of the original memory.
+Заметьте, что длины не корректируются при явном приведении сырых срезов -
+`*const [u16] as *const [u8]` создаст срез, который состоит из половины
+оригинальной памяти.
 
-Casting is not transitive, that is, even if `e as U1 as U2` is a valid
-expression, `e as U2` is not necessarily so.
+Явное приведение не транзитивно, это означает, что даже если `e as U1 as U2`
+правильное выражение, `e as U2` не обязано быть таким же.
 
-For numeric casts, there are quite a few cases to consider:
+Для чисел, есть несколько моментов, необходимых для пояснения:
 
-* casting between two integers of the same size (e.g. i32 -> u32) is a no-op
-* casting from a larger integer to a smaller integer (e.g. u32 -> u8) will
-  truncate
-* casting from a smaller integer to a larger integer (e.g. u8 -> u32) will
-    * zero-extend if the source is unsigned
-    * sign-extend if the source is signed
-* casting from a float to an integer will round the float towards zero
-    * **[NOTE: currently this will cause Undefined Behavior if the rounded
-      value cannot be represented by the target integer type][float-int]**.
-      This includes Inf and NaN. This is a bug and will be fixed.
-* casting from an integer to float will produce the floating point
-  representation of the integer, rounded if necessary (rounding strategy
-  unspecified)
-* casting from an f32 to an f64 is perfect and lossless
-* casting from an f64 to an f32 will produce the closest possible value
-  (rounding strategy unspecified)
-    * **[NOTE: currently this will cause Undefined Behavior if the value
-      is finite but larger or smaller than the largest or smallest finite
-      value representable by f32][float-float]**. This is a bug and will
-      be fixed.
+* явное приведение между двумя целыми одного размера (e.g. i32 -> u32) это 
+пустая операция
+* явное приведение большего целого к меньшему (e.g. u32 -> u8) обрежет большее
+* явное приведение меньшего целого к большего (e.g. u8 -> u32) будет
+    * дополнять нулями если источник беззнаковый
+    * дополнять знаком если источник знаковый
+* явное приведение дробного к целому осуществляется округлением дробного в 
+меньшую сторону
+    * **[ВНИМАНИЕ: на данный момент может вызвать Неопределенное Поведение, если
+     округленное значение не сможет быть представлено в целевой целый тип]
+     [float-int]**.  Включает в себя Inf и NaN. Это ошибка и она будет исправлена.
+* явное приведение целого к дробному осуществляется созданием дробного числа, 
+округленного при необходимости (стратегия округления не указана)
+* явное приведение f32 к f64 выполняется отлично и без потерь
+* явное приведение f64 к f32 создаст самое ближайшее возможное значение
+  (стратегия округления не указана)
+    * **[ВНИМАНИЕ: на данный момент может вызвать Неопределенное Поведение, если
+      значение конечно, но больше или меньше самого маленького или самого 
+      большого конечного числа, представляемым f32][float-float]**. 
+      Это ошибка и она будет исправлена.
 
 
 [float-int]: https://github.com/rust-lang/rust/issues/10184
