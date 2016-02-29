@@ -1,137 +1,132 @@
-% Exotically Sized Types
+% Типы экзотического размера
 
-Most of the time, we think in terms of types with a fixed, positive size. This
-is not always the case, however.
-
-
+Большую часть времени мы думаем в терминах типов фиксированного положительного
+размера. Однако, это не всегда так.
 
 
+# Типы динамического размера 
 
-# Dynamically Sized Types (DSTs)
+Rust на самом деле поддерживает типы динамического размера (ТДР; англ. 
+dynamically sized type, DST): типы без статически известного размера или 
+выравнивания. На поверхности, все это кажется бессмысленным: Rust *должен* 
+знать размер и выравнивание чего-либо, чтобы корректно с этим работать! В 
+этом отношении,  ТДР - это не нормальные типы. Из-за отсутствия статически 
+известного размера, они могут скрываться только за указателем особого типа. 
+Любой указатель на ТДР вследствие этого становится *толстым*, состоящим из
+указателя и информации, которая "дополняет" его (подробнее об этом ниже).
 
-Rust in fact supports Dynamically Sized Types (DSTs): types without a statically
-known size or alignment. On the surface, this is a bit nonsensical: Rust *must*
-know the size and alignment of something in order to correctly work with it! In
-this regard, DSTs are not normal types. Due to their lack of a statically known
-size, these types can only exist behind some kind of pointer. Any pointer to a
-DST consequently becomes a *fat* pointer consisting of the pointer and the
-information that "completes" them (more on this below).
+Язык предлагает два главных ТДР: типажи-объекты и срезы.
 
-There are two major DSTs exposed by the language: trait objects, and slices.
+Типаж-объект представляет тип, реализующий указанный типаж. Точный исходный тип
+*затирается* и заменяется таблицей виртуальных методов (vtable), содержащей всю
+информацию, необходимую для использования типа. Вот эта информация и дополняет
+типаж-объект: указатель на его таблицу виртуальных методов.
 
-A trait object represents some type that implements the traits it specifies.
-The exact original type is *erased* in favor of runtime reflection
-with a vtable containing all the information necessary to use the type.
-This is the information that completes a trait object: a pointer to its vtable.
+Срез - это просто отображение в какое-то подходящее хранилище - обычно в массив
+или `Vec`. Информация, которая дополняет срез - это просто количество элементов,
+на которые он указывает.
 
-A slice is simply a view into some contiguous storage -- typically an array or
-`Vec`. The information that completes a slice is just the number of elements
-it points to.
-
-Structs can actually store a single DST directly as their last field, but this
-makes them a DST as well:
+Вообще, структуры могут хранить один ТДР прямо в своем последнем поле, но это
+делает их также ТДР:
 
 ```rust
-// Can't be stored on the stack directly
+// Невозможно хранить напрямую в стеке
 struct Foo {
     info: u32,
     data: [u8],
 }
 ```
 
-**NOTE: [As of Rust 1.0 struct DSTs are broken if the last field has
-a variable position based on its alignment][dst-issue].**
+**Внимание: В Rust 1.0 ТДР, являющиеся структурами, работают неправильно, если
+ последнее поле имеет переменную позицию, зависящую от выравнивания.**
 
 
 
+# Типы с нулевым размером 
 
-
-# Zero Sized Types (ZSTs)
-
-Rust actually allows types to be specified that occupy no space:
+Rust на самом деле позволяет объявлять типы, которые не занимают места:
 
 ```rust
-struct Foo; // No fields = no size
+struct Foo; // Нет полей = нет размера
 
-// All fields have no size = no size
+// У каждого поля нет размера  = нет размера
 struct Baz {
     foo: Foo,
-    qux: (),      // empty tuple has no size
-    baz: [u8; 0], // empty array has no size
+    qux: (),      // у пустого кортежа нет размера
+    baz: [u8; 0], // у пустого массива нет размера
 }
 ```
 
-On their own, Zero Sized Types (ZSTs) are, for obvious reasons, pretty useless.
-However as with many curious layout choices in Rust, their potential is realized
-in a generic context: Rust largely understands that any operation that  produces
-or stores a ZST can be reduced to a no-op. First off, storing it  doesn't even
-make sense -- it doesn't occupy any space. Also there's only one  value of that
-type, so anything that loads it can just produce it from the  aether -- which is
-also a no-op since it doesn't occupy any space.
+Сами по себе типы с нулевым размером (ТНР; англ. zero-sized types, ZST), по 
+очевидным причинам, довольно бесполезны. Но, как и с другими любопытными 
+решениями по выделению памяти в Rust, их потенциал выражается в контексте 
+обобщений: Rust очень хорошо понимает, что любые операции, которые создают 
+или хранят ТНР, могут быть заменены на пустую операцию. Прежде всего хранение
+их вообще не имеет смысла - они не занимают никакого места. Также, есть 
+только одно значение этого типа, поэтому все, что загружает их, может создать
+их из эфира - что тоже является пустой операцией из-за того, что они опять же
+не занимают никакого места.
 
-One of the most extreme example's of this is Sets and Maps. Given a
-`Map<Key, Value>`, it is common to implement a `Set<Key>` as just a thin wrapper
-around `Map<Key, UselessJunk>`. In many languages, this would necessitate
-allocating space for UselessJunk and doing work to store and load UselessJunk
-only to discard it. Proving this unnecessary would be a difficult analysis for
-the compiler.
+Одним из самых важных примеров являются множества (sets) и словари (maps). Имея
+`Map<Key, Value>`, часто реализуют `Set<Key>` в качестве тонкой обёртки вокруг
+`Map<Key, БесполезныйМусор>`. Многие языки заставляют выделять место под
+БесполезныйМусор и вынуждают обрабатывать его хранение и загрузку только для
+того, чтобы потом выкинуть его. Их компиляторам сложно доказать, что эти действия
+не нужны.
 
-However in Rust, we can just say that  `Set<Key> = Map<Key, ()>`. Now Rust
-statically knows that every load and store is useless, and no allocation has any
-size. The result is that the monomorphized code is basically a custom
-implementation of a HashSet with none of the overhead that HashMap would have to
-support values.
+Однако в Rust мы можем просто сказать `Set<Key> = Map<Key, ()>`. Так Rust
+понимает, что любая загрузка и хранение бесполезны, и выделение памяти не нужно.
+В результате получаем, что мономорфный код - это обычная частая реализация
+HashSet без каких бы накладных расходов по поддержке значений.
 
-Safe code need not worry about ZSTs, but *unsafe* code must be careful about the
-consequence of types with no size. In particular, pointer offsets are no-ops,
-and standard allocators (including jemalloc, the one used by default in Rust)
-may return `nullptr` when a zero-sized allocation is requested, which is
-indistinguishable from out of memory.
-
-
+Безопасному коду не надо волноваться о ТНР, но *небезопасный* должен быть очень
+аккуратен с последствиями, которые влекут типы без размера. В частности,
+смещение указателей это no-op, и стандартный распределитель памяти (включая
+jemalloc, который использует по умолчанию Rust) может вернуть `nullptr` если
+запрашивается выделение памяти под тип с нулевым размером, и это будет
+неотличимо от ситуации нехватки памяти.
 
 
 
-# Empty Types
+# Пустые типы
 
-Rust also enables types to be declared that *cannot even be instantiated*. These
-types can only be talked about at the type level, and never at the value level.
-Empty types can be declared by specifying an enum with no variants:
+Rust также позволяет объявлять типы, *экземпляр которых нельзя создать*. О них
+можно говорить только на уровне типов, но никогда на уровне значений. Пустые
+типы можно объявить, указав перечисление без вариантов:
 
 ```rust
-enum Void {} // No variants = EMPTY
+enum Void {} // Вариантов нет = Пусто
 ```
 
-Empty types are even more marginal than ZSTs. The primary motivating example for
-Void types is type-level unreachability. For instance, suppose an API needs to
-return a Result in general, but a specific case actually is infallible. It's
-actually possible to communicate this at the type level by returning a
-`Result<T, Void>`. Consumers of the API can confidently unwrap such a Result
-knowing that it's *statically impossible* for this value to be an `Err`, as
-this would require providing a value of type `Void`.
+Пустые типы еще более маргинальны чем ТНР. Единственное назначение типа Void из
+примера выше - недостижимость на уровне типов. Предположим, API в общем случае
+должно возвращать Result, но какой-то частный случай никогда не возвращает
+ошибку. Здесь можно сообщить об этом на уровне типа, возвращая `Result<T,
+Void>`. Пользователи этого API могут спокойно делать unwrap такого Result, зная
+что *статически невозможно* получить `Err` в значении, так как пришлось бы
+предоставлять значение типа `Void`.
 
-In principle, Rust can do some interesting analyses and optimizations based
-on this fact. For instance, `Result<T, Void>` could be represented as just `T`,
-because the `Err` case doesn't actually exist. The following *could* also
-compile:
+В принципе, Rust мог бы выполнять некоторый интересный анализ и оптимизацию,
+зная все это. Например, `Result<T, Void>` мог бы быть представлен просто как
+`T`, потому что случая `Err` на самом деле не существует. Код ниже *мог* бы
+компилироваться:
 
 ```rust,ignore
 enum Void {}
 
 let res: Result<u32, Void> = Ok(0);
 
-// Err doesn't exist anymore, so Ok is actually irrefutable.
+// Err не существует, поэтому Ok полностью безошибочен.
 let Ok(num) = res;
 ```
 
-But neither of these tricks work today, so all Void types get you is
-the ability to be confident that certain situations are statically impossible.
+Но на данный момент ни один из этих трюков не работает, поэтому все, что дает
+вам тип void - это возможность быть уверенным в том, что некоторые ситуации
+*статически невозможны*.
 
-One final subtle detail about empty types is that raw pointers to them are
-actually valid to construct, but dereferencing them is Undefined Behavior
-because that doesn't actually make sense. That is, you could model C's `void *`
-type with `*const Void`, but this doesn't necessarily gain anything over using
-e.g. `*const ()`, which *is* safe to randomly dereference.
-
-
-[dst-issue]: https://github.com/rust-lang/rust/issues/26403
+И последний тонкий момент о пустых типах - сырые указатели на них создавать
+можно и это считается правильным, но разыменование таких указателей приведет к
+Неопределенному поведению, потому что никакого смысла в этом нет. Таким образом,
+вы можете смоделировать `void *` из Си с помощью `*const Void`, но это не
+обязательно даст выигрыш по сравнению с использованием, например, `*const ()`,
+который *безопасен* по отношению к случайному разыменованию.

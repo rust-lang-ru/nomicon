@@ -1,32 +1,33 @@
 % repr(Rust)
 
-First and foremost, all types have an alignment specified in bytes. The
-alignment of a type specifies what addresses are valid to store the value at. A
-value of alignment `n` must only be stored at an address that is a multiple of
-`n`. So alignment 2 means you must be stored at an even address, and 1 means
-that you can be stored anywhere. Alignment is at least 1, and always a power of
-2. Most primitives are generally aligned to their size, although this is
-platform-specific behavior. In particular, on x86 `u64` and `f64` may be only
-aligned to 32 bits.
+Во-первых, все типы имеют выравнивание, указываемое в байтах. Выравнивание
+типа определяет в каких адресах разрешается хранить значения. Значение, имеющее
+выравнивание `n`, должно храниться по адресу кратному `n`. То есть выравнивание
+2 означает, что его можно хранить только по четным адресам, а 1 означает, что по
+любым. Выравнивание всегда больше или равно 1, и всегда является степенью 2.
+Большинство примитивов выравненны по своему размеру, хотя это очень платформно-
+специфичное поведение. В частности, на x86 `u64` и `f64` могут быть выравненны
+только по 32 бита.
 
-A type's size must always be a multiple of its alignment. This ensures that an
-array of that type may always be indexed by offsetting by a multiple of its
-size. Note that the size and alignment of a type may not be known
-statically in the case of [dynamically sized types][dst].
+Размер типа всегда должен быть кратным его выравниванию. Это гарантирует, что
+массив типов может всегда быть проиндексирован посредством смещения на величину,
+кратную  размера типа. Имейте ввиду, что размер и выравнивание типа могут быть
+неизвестны статически в случае [типов динамического размера][dst].
 
-Rust gives you the following ways to lay out composite data:
+Rust дает вам следующие способы для размещения составных данные:
 
-* structs (named product types)
-* tuples (anonymous product types)
-* arrays (homogeneous product types)
-* enums (named sum types -- tagged unions)
+* struct (именованные типы-произведения)
+* tuple (анонимные типы-произведения)
+* array (гомогенные типы-произведения)
+* enum (именованные типы-суммы)
 
-An enum is said to be *C-like* if none of its variants have associated data.
+Enum называется *Си-подобным* если ни у одного из его вариантов нет связанных
+данных.
 
-Composite structures will have an alignment equal to the maximum
-of their fields' alignment. Rust will consequently insert padding where
-necessary to ensure that all fields are properly aligned and that the overall
-type's size is a multiple of its alignment. For instance:
+Составные структуры будут иметь выравнивание, равное максимуму из выравниваний
+их полей. Вследствие этого Rust добавит вставки (padding), где это необходимо,
+чтобы гарантировать, что все поля правильно выравненны и общий размер типа
+соответствует этому выравниванию. Например:
 
 ```rust
 struct A {
@@ -36,24 +37,24 @@ struct A {
 }
 ```
 
-will be 32-bit aligned on an architecture that aligns these primitives to their
-respective sizes. The whole struct will therefore have a size that is a multiple
-of 32-bits. It will potentially become:
+будет выравненно по 32-бита в архитектуре, которая выравнивает эти примитивы по
+соответствующему размеру. Таким образом полная struct будет иметь размер,
+кратный 32-бит. Вероятно, все станет таким:
 
 ```rust
 struct A {
     a: u8,
-    _pad1: [u8; 3], // to align `b`
+    _pad1: [u8; 3], // для выравнивания `b`
     b: u32,
     c: u16,
-    _pad2: [u8; 2], // to make overall size multiple of 4
+    _pad2: [u8; 2], // для того чтобы сделать размер равным 4
 }
 ```
 
-There is *no indirection* for these types; all data is stored within the struct,
-as you would expect in C. However with the exception of arrays (which are
-densely packed and in-order), the layout of data is not by default specified in
-Rust. Given the two following struct definitions:
+Для этих типов *не используется косвенная адресация*; все данные хранятся 
+внутри структуры, также как было бы и в Си. За исключением массивов (которые 
+плотно упакованы и имеют порядок), положение данных, по умолчанию, не 
+определено в Rust. Возьмем два определения struct:
 
 ```rust
 struct A {
@@ -67,16 +68,15 @@ struct B {
 }
 ```
 
-Rust *does* guarantee that two instances of A have their data laid out in
-exactly the same way. However Rust *does not* currently guarantee that an
-instance of A has the same field ordering or padding as an instance of B, though
-in practice there's no reason why they wouldn't.
+Rust *гарантирует*, что два экземпляра А будут иметь одинаковое расположение
+данных. Но Rust *не гарантирует* на данный момент, что экземпляр A будет иметь
+такой же порядок или паддинг, как и экземпляр B, хотя на практике нет никакого
+основания предполагать, почему он должен отличаться.
 
-With A and B as written, this point would seem to be pedantic, but several other
-features of Rust make it desirable for the language to play with data layout in
-complex ways.
+Возьмем A и B как здесь написано, кажется, что все ясно, но другие особенности
+Rust используют более сложные игры с расположением данных внутри языка.
 
-For instance, consider this struct:
+Например, считаем, что есть такая struct:
 
 ```rust
 struct Foo<T, U> {
@@ -86,10 +86,11 @@ struct Foo<T, U> {
 }
 ```
 
-Now consider the monomorphizations of `Foo<u32, u16>` and `Foo<u16, u32>`. If
-Rust lays out the fields in the order specified, we expect it to pad the
-values in the struct to satisfy their alignment requirements. So if Rust
-didn't reorder fields, we would expect it to produce the following:
+Рассмотрим мономорфизации `Foo<u32, u16>` и `Foo<u16, u32>`. Если Rust
+расположит поля в указанном порядке, мы ожидаем, что он набьет вставками
+(padding) значения в struct для того, чтобы удовлетворить требования
+выравнивания. Поэтому, если Rust не переопределит порядок полей, мы ожидаем, что
+он выработает следующее:
 
 ```rust,ignore
 struct Foo<u16, u32> {
@@ -107,13 +108,14 @@ struct Foo<u32, u16> {
 }
 ```
 
-The latter case quite simply wastes space. An optimal use of space therefore
-requires different monomorphizations to have *different field orderings*.
+В последнем случае место просто напрасно расходуется. Оптимальное использование
+места, таким образом, требует, чтобы у разных мономорфизаций *менялся порядок
+полей*.
 
-**Note: this is a hypothetical optimization that is not yet implemented in Rust
-1.0**
+**Внимание: это гипотетическая оптимизация, которая еще не реализована в Rust 1.0**
 
-Enums make this consideration even more complicated. Naively, an enum such as:
+Перечисления делают этот анализ даже еще сложнее. Наивно предполагаем, что
+перечисление:
 
 ```rust
 enum Foo {
@@ -123,32 +125,33 @@ enum Foo {
 }
 ```
 
-would be laid out as:
+будет расположен так:
 
 ```rust
 struct FooRepr {
-    data: u64, // this is either a u64, u32, or u8 based on `tag`
+    data: u64, // здесь или u64, u32 или u8 - зависит от `tag`
     tag: u8,   // 0 = A, 1 = B, 2 = C
 }
 ```
 
-And indeed this is approximately how it would be laid out in general (modulo the
-size and position of `tag`).
+И на самом деле почти так и будет все расположено в памяти в общем случае (размер
+данных и позиция `tag`).
 
-However there are several cases where such a representation is inefficient. The
-classic case of this is Rust's "null pointer optimization": an enum consisting
-of a single outer unit variant (e.g. `None`) and a (potentially nested) non-
-nullable pointer variant (e.g. `&T`) makes the tag unnecessary, because a null
-pointer value can safely be interpreted to mean that the unit variant is chosen
-instead. The net result is that, for example, `size_of::<Option<&T>>() ==
-size_of::<&T>()`.
+Но есть случаи, в которых такое представление является неэффективным.
+Классический вариант - "оптимизация нулевого указателя" Rust: перечисления,
+состоящие из одного варианта (например, `None`) и (возможно вложенного) варианта
+с ненулевым указателем (например, `&T`) делают тэг необязательным, потому что
+значение нулевого указателя может безопасно означать, что выбран первый вариант
+(в данном примере, `None`). Конечный результат - например, будет таким
+`size_of::<Option<&T>>() == size_of::<&T>()`.
 
-There are many types in Rust that are, or contain, non-nullable pointers such as
-`Box<T>`, `Vec<T>`, `String`, `&T`, and `&mut T`. Similarly, one can imagine
-nested enums pooling their tags into a single discriminant, as they are by
-definition known to have a limited range of valid values. In principle enums could
-use fairly elaborate algorithms to cache bits throughout nested types with
-special constrained representations. As such it is *especially* desirable that
-we leave enum layout unspecified today.
+Много типов в Rust, которые являются или содержат ненулевые указатели, такие как
+`Box<T>`, `Vec<T>`, `String`, `&T` и `&mut T`. По аналогии, можно представить,
+как вложенные  перечисления объединяют свои тэги в одно значение, так как по
+определению известно, что у них ограниченный набор правильных значений. В
+принципе перечисления могут использовать довольно сложные алгоритмы для
+размещения битов всех вложенных типов в специальном ограничивающем их
+представлении. Поэтому сейчас нам кажется, что оставить нетронутым расположение
+перечислений в памяти, будет *особенно* целесообразно.
 
 [dst]: exotic-sizes.html#dynamically-sized-types-dsts
