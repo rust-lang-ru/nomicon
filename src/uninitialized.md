@@ -1,10 +1,11 @@
-% Working With Uninitialized Memory
+% Работа с неинициализированной памятью
 
-All runtime-allocated memory in a Rust program begins its life as
-*uninitialized*. In this state the value of the memory is an indeterminate pile
-of bits that may or may not even reflect a valid state for the type that is
-supposed to inhabit that location of memory. Attempting to interpret this memory
-as a value of *any* type will cause Undefined Behavior. Do Not Do This.
+Вся используемая во время выполнения память в программах на Rust начинает свою
+жизнь *неинициализированной*. В таком состоянии значения в памяти представляют
+собой кучку неопределенных бит, которые неизвестно смогут или не смогут отразить
+правильное состояние для типа, который предполагается, что находится в данном
+участке памяти. Попытка интерпретировать эту память в качестве значения *любого*
+типа вызовет Неопределенное Поведение. Не Делайте Так.
 
-Rust provides mechanisms to work with uninitialized memory in checked (safe) and
-unchecked (unsafe) ways.
+Rust предоставляет механизмы для работы с неинициализированной памятью в
+проверяемом (безопасном) и непроверяемом (небезопасном) ключе.
