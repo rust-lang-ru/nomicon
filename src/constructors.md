@@ -1,7 +1,7 @@
-% Constructors
+% Конструкторы
 
-There is exactly one way to create an instance of a user-defined type: name it,
-and initialize all its fields at once:
+Есть только один способ создать экземпляр пользовательского типа: дать ему имя,
+и инициализировать сразу все его поля:
 
 ```rust
 struct Foo {
@@ -22,38 +22,39 @@ let bar = Bar::X(0);
 let empty = Unit;
 ```
 
-That's it. Every other way you make an instance of a type is just calling a
-totally vanilla function that does some stuff and eventually bottoms out to The
-One True Constructor.
+Вот и все. Каждый любой другой способ создания экземпляра типа - это только
+вызов сахарной функции, которая делает какие-то вещи и в конечном итоге
+вызывает Один Единственный Конструктор.
 
-Unlike C++, Rust does not come with a slew of built-in kinds of constructor.
-There are no Copy, Default, Assignment, Move, or whatever constructors. The
-reasons for this are varied, but it largely boils down to Rust's philosophy of
-*being explicit*.
+В отличие от C++, Rust не поставляется с убийственным набором конструкторов. В
+нем нет Copy, Default, Assignment, Move или еще каких-либо конструкторов. Этому
+множество причин, но основной является философия Rust - *быть явным*.
 
-Move constructors are meaningless in Rust because we don't enable types to
-"care" about their location in memory. Every type must be ready for it to be
-blindly memcopied to somewhere else in memory. This means pure on-the-stack-but-
-still-movable intrusive linked lists are simply not happening in Rust (safely).
+Конструкторы Move бессмысленны в Rust, потому что мы не позволяем типам
+"заботиться" о своем расположении в памяти. Каждый тип должен быть готов быть
+скопированным в другое место в памяти. Это означает, что чистые на-стеке-но-все-
+еще-перемещаемые навязчивые связные списки просто нельзя встретить в Rust
+(безопасном).
 
-Assignment and copy constructors similarly don't exist because move semantics
-are the only semantics in Rust. At most `x = y` just moves the bits of y into
-the x variable. Rust does provide two facilities for providing C++'s copy-
-oriented semantics: `Copy` and `Clone`. Clone is our moral equivalent of a copy
-constructor, but it's never implicitly invoked. You have to explicitly call
-`clone` on an element you want to be cloned. Copy is a special case of Clone
-where the implementation is just "copy the bits". Copy types *are* implicitly
-cloned whenever they're moved, but because of the definition of Copy this just
-means not treating the old copy as uninitialized -- a no-op.
+Конструкторы Assignment и Copy также не существуют, потому что семантика
+перемещения - это единственная семантика в Rust. В большинстве случаев `x = y`
+просто перемещает биты y в переменную x. Rust дает две возможности для
+предоставления copy-ориентированной семантики C++: `Copy` и `Clone`. Clone - это
+наш духовный эквивалент конструктора copy, но он никогда не вызовется неявно.
+Вам нужно явно вызвать `clone` у элемента, который вы хотите клонировать. Copy -
+особый случай Clone, у которого реализацией является просто "скопируй биты".
+Типы Copy *неявно* клонируются во время перемещения, но из определения Copy -
+это просто означает, не считать старую копию неинициализированной - то есть, это
+пустая операция.
 
-While Rust provides a `Default` trait for specifying the moral equivalent of a
-default constructor, it's incredibly rare for this trait to be used. This is
-because variables [aren't implicitly initialized][uninit]. Default is basically
-only useful for generic programming. In concrete contexts, a type will provide a
-static `new` method for any kind of "default" constructor. This has no relation
-to `new` in other languages and has no special meaning. It's just a naming
-convention.
+Хоть Rust и предоставляет типаж `Default` для определения духовного эквивалента
+конструктора по умолчанию, его очень редко используют. Все из-за того, что
+переменные [неявно не инициализируются][uninit]. Default в основном полезен
+только для обобщенного программирования. В конкретном контексте, тип предоставит
+статический метод `new` для любого типа конструкторов "по умолчанию". Здесь нет
+связи с `new` из других языков, и особого смысла это слово тоже не несет. Это
+просто соглашение именования.
 
-TODO: talk about "placement new"?
+TODO: рассказать о "размещении new"?
 
 [uninit]: uninitialized.html
