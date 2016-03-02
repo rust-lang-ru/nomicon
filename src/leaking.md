@@ -1,49 +1,51 @@
-% Leaking
+% Утечка
 
-Ownership-based resource management is intended to simplify composition. You
-acquire resources when you create the object, and you release the resources when
-it gets destroyed. Since destruction is handled for you, it means you can't
-forget to release the resources, and it happens as soon as possible! Surely this
-is perfect and all of our problems are solved.
+Основанное на владении управление ресурсами предназначено для упрощения
+композиции. Вы получаете ресурсы, создавая объект, и отпускаете ресурсы, удаляя
+его. Из-за того что удаление производится за вас, вы не можете забыть отпустить
+ресурсы, и это произойдет настолько быстро, насколько это возможно! Конечно, все
+замечательно, и все наши проблемы решены.
 
-Everything is terrible and we have new and exotic problems to try to solve.
+На самом деле все ужасно и мы должны попытаться решить новые и экзотичные
+проблемы.
 
-Many people like to believe that Rust eliminates resource leaks. In practice,
-this is basically true. You would be surprised to see a Safe Rust program
-leak resources in an uncontrolled way.
+Многие люди полагают, что Rust устраняет утечку ресурсов. На практике, это в
+основном правда. Вы бы очень удивились, увидев, что у программы на Безопасном
+Rust утекают ресурсы в неконтролируемом направлении.
 
-However from a theoretical perspective this is absolutely not the case, no
-matter how you look at it. In the strictest sense, "leaking" is so abstract as
-to be unpreventable. It's quite trivial to initialize a collection at the start
-of a program, fill it with tons of objects with destructors, and then enter an
-infinite event loop that never refers to it. The collection will sit around
-uselessly, holding on to its precious resources until the program terminates (at
-which point all those resources would have been reclaimed by the OS anyway).
+Однако с теоретической точки зрения все абсолютно не так, независимо от того,
+как вы смотрите на это. В самом строгом смысле, "утечка" настолько абстрактна,
+насколько и неизбежна. Довольно просто инициализировать коллекцию вначале
+программы, наполнить ее кучей объектов с деструкторами и затем войти в
+бесконечный цикл, который никогда не обращается к ней. Коллекция будет
+бесполезно сидеть в памяти, удерживая ее драгоценные ресурсы до окончания
+программы (в этот момент все эти ресурсы все равно будут собраны сборщиком ОС).
 
-We may consider a more restricted form of leak: failing to drop a value that is
-unreachable. Rust also doesn't prevent this. In fact Rust *has a function for
-doing this*: `mem::forget`. This function consumes the value it is passed *and
-then doesn't run its destructor*.
+Можем ограничить форму утечки: ошибочная попытка удаления значения, которое уже
+недоступно. Rust также не предотвращает это. На самом деле у Rust даже есть
+функция *для этого*: `mem::forget`. Эта функция съедает полученное значение *и
+не вызывает его деструктор*.
 
-In the past `mem::forget` was marked as unsafe as a sort of lint against using
-it, since failing to call a destructor is generally not a well-behaved thing to
-do (though useful for some special unsafe code). However this was generally
-determined to be an untenable stance to take: there are many ways to fail to
-call a destructor in safe code. The most famous example is creating a cycle of
-reference-counted pointers using interior mutability.
+Раньше `mem::forget` помечалась unsafe в качестве статической проверки против
+нее, из-за того, что ошибка при вызове деструктора это чаще всего неправильная
+вещь (хотя и полезная в некотором особом небезопасном коде). Однако в целом это
+принимали как непригодную позицию: есть много способов получить ошибки при
+вызове деструктора в безопасном коде. Самым известным примером является создание
+цикла из указателей подсчета-ссылок (RC), использующих внутреннюю изменяемость.
 
-It is reasonable for safe code to assume that destructor leaks do not happen, as
-any program that leaks destructors is probably wrong. However *unsafe* code
-cannot rely on destructors to be run in order to be safe. For most types this
-doesn't matter: if you leak the destructor then the type is by definition
-inaccessible, so it doesn't matter, right? For instance, if you leak a `Box<u8>`
-then you waste some memory but that's hardly going to violate memory-safety.
+Разумно для безопасного кода предполагать, что утечка в деструкторе не
+происходит, потому что любая программа с такой утечкой неправильна. Однако
+*небезопасный* код не может полагаться, на то, что вызываемые деструкторы
+являются безопасными. Для большинства типов это не играет роли: если утечка в
+деструкторе, то тип по определению недоступен, поэтому это не важно, не так ли?
+Например, если утечка в `Box<u8>`, то вы тратите память впустую, но это вряд ли
+нарушит безопасность памяти.
 
-However where we must be careful with destructor leaks are *proxy* types. These
-are types which manage access to a distinct object, but don't actually own it.
-Proxy objects are quite rare. Proxy objects you'll need to care about are even
-rarer. However we'll focus on three interesting examples in the standard
-library:
+Но, вот где мы должны быть осторожны с утечкой в деструкторах, это в *прокси*
+типах. Это типы, управляющие доступом к определенному объекту, но на самом деле
+не владеющие им. Прокси объекты довольно редки. Прокси объекты, о которых вы
+должны волноваться, еще более редки. Однако, рассмотрим три интересных примера
+из стандартной библиотеки:
 
 * `vec::Drain`
 * `Rc`
@@ -53,57 +55,57 @@ library:
 
 ## Drain
 
-`drain` is a collections API that moves data out of the container without
-consuming the container. This enables us to reuse the allocation of a `Vec`
-after claiming ownership over all of its contents. It produces an iterator
-(Drain) that returns the contents of the Vec by-value.
+`drain` это API коллекций, который передает владение данными из контейнера, не 
+уничтожая сам контейнер. Это позволяет нам заново использовать место 
+расположения `Vec` после передачи владения всего содержимого. Он создает 
+итератор (Drain), который возвращает содержимое Vec по-значению.
 
-Now, consider Drain in the middle of iteration: some values have been moved out,
-and others haven't. This means that part of the Vec is now full of logically
-uninitialized data! We could backshift all the elements in the Vec every time we
-remove a value, but this would have pretty catastrophic performance
-consequences.
+Теперь, представьте Drain в середине итерации: некоторые значения уже переданы,
+некоторые еще нет. Это означает, что часть Vec - это полностью
+неинициализированные данные! Мы могли бы сохранять все элементы Vec каждый раз
+перед удалением значения, но это будет иметь довольно катастрофические
+последствия по производительности.
 
-Instead, we would like Drain to fix the Vec's backing storage when it is
-dropped. It should run itself to completion, backshift any elements that weren't
-removed (drain supports subranges), and then fix Vec's `len`. It's even
-unwinding-safe! Easy!
+Вместо этого, мы хотим, чтобы Drain восстанавливал то, что осталось в Vec после
+своего удаления. Он должен закончить выполнение, восстановить любые элементы,
+которые еще не были удалены (процедить поддиапазоны поддержки), и изменить `len`
+у Vec. Он даже безопасен при размотке! Элементарно!
 
-Now consider the following:
+Теперь представим следующее:
 
 ```rust,ignore
 let mut vec = vec![Box::new(0); 4];
 
 {
-    // start draining, vec can no longer be accessed
+    // начало процеживания, vec больше не доступен
     let mut drainer = vec.drain(..);
 
-    // pull out two elements and immediately drop them
+    // вытаскиваем два элемента и тут же их уничтожаем
     drainer.next();
     drainer.next();
 
-    // get rid of drainer, but don't call its destructor
+    // избавляемся от drainer, но не вызываем его деструктор
     mem::forget(drainer);
 }
 
-// Oops, vec[0] was dropped, we're reading a pointer into free'd memory!
+// Упсс, vec[0] удален, мы читаем указатель на освобожденную память!
 println!("{}", vec[0]);
 ```
 
-This is pretty clearly Not Good. Unfortunately, we're kind of stuck between a
-rock and a hard place: maintaining consistent state at every step has an
-enormous cost (and would negate any benefits of the API). Failing to maintain
-consistent state gives us Undefined Behavior in safe code (making the API
-unsound).
+Это определенно Не Хорошо. К сожалению, мы застряли между молотом и наковальней:
+поддержка согласованного состояния имеет неподъемную цену (и обесценит любые
+преимущества API). Ошибка при поддержке несогласованного состояния дает нам
+Неопределенное Поведение в безопасном коде (делает API несостоятельным).
 
-So what can we do? Well, we can pick a trivially consistent state: set the Vec's
-len to be 0 when we start the iteration, and fix it up if necessary in the
-destructor. That way, if everything executes like normal we get the desired
-behavior with minimal overhead. But if someone has the *audacity* to
-mem::forget us in the middle of the iteration, all that does is *leak even more*
-(and possibly leave the Vec in an unexpected but otherwise consistent state).
-Since we've accepted that mem::forget is safe, this is definitely safe. We call
-leaks causing more leaks a *leak amplification*.
+Так что нам делать? Ну, мы можем выбрать обычное согласованное состояние:
+установить длину Vec в 0 вначале итерации, и поменять ее при необходимости в
+деструкторе. Таким образом, если все выполняется нормально, мы получим
+предсказуемое поведение с небольшими накладными расходами. Но если у кого-то
+*появится наглость* выполнить mem::forget в середине итерации, все *еще больше
+утечет* (и возможно оставит Vec в неожиданном, но при этом согласованном
+состоянии). Из-за того, что mem::forget безопасен, все остальное тоже
+определенно безопасно. Мы называем утечки, вызывающие еще большие утечки,
+*усилением утечки*.
 
 
 
