@@ -94,10 +94,10 @@ println!("{}", vec[0]);
 
 Это определенно Не Хорошо. К сожалению, мы застряли между молотом и наковальней:
 поддержка согласованного состояния имеет неподъемную цену (и обесценит любые
-преимущества API). Ошибка при поддержке несогласованного состояния дает нам
-Неопределенное Поведение в безопасном коде (делает API несостоятельным).
+преимущества API). Несогласованное состояния дает нам Неопределенное Поведение в
+безопасном коде (делает API несостоятельным).
 
-Так что нам делать? Ну, мы можем выбрать обычное согласованное состояние:
+Так что нам делать? Ну, мы можем выбрать тривиальное согласованное состояние:
 установить длину Vec в 0 вначале итерации, и поменять ее при необходимости в
 деструкторе. Таким образом, если все выполняется нормально, мы получим
 предсказуемое поведение с небольшими накладными расходами. Но если у кого-то
@@ -112,16 +112,15 @@ println!("{}", vec[0]);
 
 ## Rc
 
-Rc is an interesting case because at first glance it doesn't appear to be a
-proxy value at all. After all, it manages the data it points to, and dropping
-all the Rcs for a value will drop that value. Leaking an Rc doesn't seem like it
-would be particularly dangerous. It will leave the refcount permanently
-incremented and prevent the data from being freed or dropped, but that seems
-just like Box, right?
+Rc - интересный случай, потому что на первый взгляд он вообще не является прокси
+значением. В конце концов он управляет данными, на которые указывает, и удаляет
+их после удаления всех Rc. Утечка в Rc не кажется особо опасной. Она оставит
+счетчик ссылок в постоянном значении, что не даст данным удалиться или
+освободиться, но это же очень похоже на Box, не правда ли?
 
-Nope.
+Неа.
 
-Let's consider a simplified implementation of Rc:
+Представим упрощенную реализацию Rc:
 
 ```rust,ignore
 struct Rc<T> {
@@ -136,7 +135,7 @@ struct RcBox<T> {
 impl<T> Rc<T> {
     fn new(data: T) -> Self {
         unsafe {
-            // Wouldn't it be nice if heap::allocate worked like this?
+            // Правда было бы здорово, если бы heap::allocate так работал?
             let ptr = heap::allocate::<RcBox<T>>();
             ptr::write(ptr, RcBox {
                 data: data,
@@ -168,86 +167,90 @@ impl<T> Drop for Rc<T> {
 }
 ```
 
-This code contains an implicit and subtle assumption: `ref_count` can fit in a
-`usize`, because there can't be more than `usize::MAX` Rcs in memory. However
-this itself assumes that the `ref_count` accurately reflects the number of Rcs
-in memory, which we know is false with `mem::forget`. Using `mem::forget` we can
-overflow the `ref_count`, and then get it down to 0 with outstanding Rcs. Then
-we can happily use-after-free the inner data. Bad Bad Not Good.
+В коде содержится неявное и неуловимое предположение: `ref_count` подходит по
+размеру к `usize`, потому что количество RC в памяти не может быть больше, чем
+`usize::MAX`. Но это само по себе подразумевает, что `ref_count` точно отражает
+количество Rc в памяти, что, как мы знаем, не всегда правда с `mem::forget`.
+Используя `mem::forget`, мы можем переполнить `ref_count`, и затем опустить его
+до 0 невыполненными Rc. Дальше можем счастливо использовать-после-освобождения
+внутренние данные. Плохо Плохо Не Хорошо.
 
-This can be solved by just checking the `ref_count` and doing *something*. The
-standard library's stance is to just abort, because your program has become
-horribly degenerate. Also *oh my gosh* it's such a ridiculous corner case.
+Можно исправить это, просто проверяя `ref_count` и выполняя *что-то*. Позиция
+стандартной библиотеки - просто отменить все с ошибкой, потому что программа
+ужасно ухудшится в таком случае. К тому же, *бог ты мой*, это все настолько
+нелепо.
 
 
 
 
 ## thread::scoped::JoinGuard
 
-The thread::scoped API intends to allow threads to be spawned that reference
-data on their parent's stack without any synchronization over that data by
-ensuring the parent joins the thread before any of the shared data goes out
-of scope.
+API thread::scoped разрешает порождать потоки, ссылающиеся на данные из
+родительского стека, без какой-либо синхронизации этих данных, гарантируя, что
+родитель завершит поток до того как любые из этих общих данных выйдут из области
+видимости.
 
 ```rust,ignore
 pub fn scoped<'a, F>(f: F) -> JoinGuard<'a>
     where F: FnOnce() + Send + 'a
 ```
 
-Here `f` is some closure for the other thread to execute. Saying that
-`F: Send +'a` is saying that it closes over data that lives for `'a`, and it
-either owns that data or the data was Sync (implying `&data` is Send).
+Здесь `f` - это замыкание, выполняемое в другом потоке. Выражение `F: Send
++'a` означает, что F замыкается на данных, которые живут `'a`, и либо он
+владеет данными, либо данные являются Sync (реализация `&data` является Send).
 
-Because JoinGuard has a lifetime, it keeps all the data it closes over
-borrowed in the parent thread. This means the JoinGuard can't outlive
-the data that the other thread is working on. When the JoinGuard *does* get
-dropped it blocks the parent thread, ensuring the child terminates before any
-of the closed-over data goes out of scope in the parent.
+Из-за того, что у JoinGuard есть время жизни, он держит заимствованными все
+данные замыкания в потоке родителе. Это означает, что JoinGuard не может жить
+дольше, чем данные, с которыми работает другой поток. Когда JoinGuard *в
+действительности* удаляется, он блокирует родительский поток, гарантируя, что
+дочерний поток удалится до того, как данные замыкания выйдут из области
+видимости родительского потока.
 
-Usage looked like:
+Использование выглядит так:
 
 ```rust,ignore
 let mut data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 {
     let guards = vec![];
     for x in &mut data {
-        // Move the mutable reference into the closure, and execute
-        // it on a different thread. The closure has a lifetime bound
-        // by the lifetime of the mutable reference `x` we store in it.
-        // The guard that is returned is in turn assigned the lifetime
-        // of the closure, so it also mutably borrows `data` as `x` did.
-        // This means we cannot access `data` until the guard goes away.
+        // Перемещаем изменяемую ссылку в замыкание, и выполняем его в 
+        // другом потоке. У замыкания границы времени жизни совпадают с
+        // временем жизни изменяемой ссылки `x`, которую мы храним в нем.
+        // Возвращаемому охраннику в свою очередь присвоено время жизни
+        // замыкания, и он также изменяемо заимствует `data`, как сделал `x`.
+        // Это означает, что у нас нет доступа к `data`, пока охранник не уйдет.
         let guard = thread::scoped(move || {
             *x *= 2;
         });
-        // store the thread's guard for later
+        // сохраняем охранника потока на будущее.
         guards.push(guard);
     }
-    // All guards are dropped here, forcing the threads to join
-    // (this thread blocks here until the others terminate).
-    // Once the threads join, the borrow expires and the data becomes
-    // accessible again in this thread.
+    // Все охранники удаляются здесь, заставляя завершаться потоки
+    // (текущий поток блокируется здесь пока другие потоки не завершатся).
+    // Когда потоки завершились, заимствование заканчивается и данные становятся
+    // опять доступными в текущем потоке.
 }
-// data is definitely mutated here.
+// данные определенно будут изменены здесь.
 ```
 
-In principle, this totally works! Rust's ownership system perfectly ensures it!
-...except it relies on a destructor being called to be safe.
+В принципе все нормально работает! Система владения Rust отлично гарантирует
+это! ...кроме одного - она опирается на то, что вызываемый деструктор должен
+быть безопасным.
 
 ```rust,ignore
 let mut data = Box::new(0);
 {
     let guard = thread::scoped(|| {
-        // This is at best a data race. At worst, it's also a use-after-free.
+        // Это в самом лучшем случае гонка данных. В худшем - использование-после-освобождения.
         *data += 1;
     });
-    // Because the guard is forgotten, expiring the loan without blocking this
-    // thread.
+    // Из-за того, что охранник забыт, заимствование заканчивается без 
+    // блокировки текущего потока.
     mem::forget(guard);
 }
-// So the Box is dropped here while the scoped thread may or may not be trying
-// to access it.
+// Итак, Box удаляется здесь, в то время как поток из области видимости выше 
+// может попытаться получить доступ к нему.
 ```
 
-Dang. Here the destructor running was pretty fundamental to the API, and it had
-to be scrapped in favor of a completely different design.
+Бум. Здесь выполнение деструктора было базовой штукой в API, что было
+пересмотрено в пользу абсолютно противоположной конструкции.
