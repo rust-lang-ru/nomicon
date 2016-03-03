@@ -1,31 +1,32 @@
-% Data Races and Race Conditions
+% Гонки данных и их условия
 
-Safe Rust guarantees an absence of data races, which are defined as:
+Безопасный Rust гарантирует отсутствие гонок данных, определяемых так:
 
-* two or more threads concurrently accessing a location of memory
-* one of them is a write
-* one of them is unsynchronized
+* два или больше потока одновременно получают доступ к участку памяти
+* один из них пишет
+* один из них не синхронизирован 
 
-A data race has Undefined Behavior, and is therefore impossible to perform
-in Safe Rust. Data races are *mostly* prevented through rust's ownership system:
-it's impossible to alias a mutable reference, so it's impossible to perform a
-data race. Interior mutability makes this more complicated, which is largely why
-we have the Send and Sync traits (see below).
+У гонок данных Неопределенное Поведение, и, соответственно, их невозможно
+выполнить в безопасном Rust. Гонки данных *в большинстве своем* предотвращаются
+системой владения Rust: изменяемые ссылки не могут иметь совпадающие указатели,
+поэтому и невозможно получить гонки данных. Внутренняя изменяемость делает все
+сложней, именно поэтому у нас есть типажи Send и Sync (смотри ниже).
 
-**However Rust does not prevent general race conditions.**
+**Однако Rust не предотвращает общие условия для гонок.**
 
-This is pretty fundamentally impossible, and probably honestly undesirable. Your
-hardware is racy, your OS is racy, the other programs on your computer are racy,
-and the world this all runs in is racy. Any system that could genuinely claim to
-prevent *all* race conditions would be pretty awful to use, if not just
-incorrect.
+Это принципиально невозможно, и, честно говоря, нежелательно. Важе железо может
+вызывать гонки, ваша ОС может вызывать гонки, другие программы на вашем
+компьютере могут вызывать гонки и мир, в котором все это выполняется, тоже
+подвержен этому. Всеми системами, искренне утверждающими, что предотвращают
+*все* условия для гонок, будет довольно ужасно пользоваться, если просто не
+невозможно.
 
-So it's perfectly "fine" for a Safe Rust program to get deadlocked or do
-something incredibly stupid with incorrect synchronization. Obviously such a
-program isn't very good, but Rust can only hold your hand so far. Still, a
-race condition can't violate memory safety in a Rust program on
-its own. Only in conjunction with some other unsafe code can a race condition
-actually violate memory safety. For instance:
+Поэтому программы на безопасном Rust абсолютно "спокойно" могут зайти в тупик
+или сделать что-нибудь невероятно глупое, обладая некорректной синхронизацией.
+Очевидно, что такие программы не очень хороши, но Rust может только поднять руки
+в этом случае. Итак, условия для гонок сами по себе не могут нарушить
+безопасность памяти в Rust. Только в связке с другим небезопасным кодом они на
+самом деле могут это сделать. Например:
 
 ```rust,no_run
 use std::thread;
@@ -33,28 +34,28 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 let data = vec![1, 2, 3, 4];
-// Arc so that the memory the AtomicUsize is stored in still exists for
-// the other thread to increment, even if we completely finish executing
-// before it. Rust won't compile the program without it, because of the
-// lifetime requirements of thread::spawn!
+// Arc потому что память, в которой хранится AtomicUsize все еще существует для 
+// другого потока инкремента, даже если мы полностью закончили выполнение
+// до него. Rust не компилирует программу без этого, из-за требований времен 
+// жизни для thread::spawn!
 let idx = Arc::new(AtomicUsize::new(0));
 let other_idx = idx.clone();
 
-// `move` captures other_idx by-value, moving it into this thread
+// `move` захватывает other_idx по-значению, передавая его в этот поток
 thread::spawn(move || {
-    // It's ok to mutate idx because this value
-    // is an atomic, so it can't cause a Data Race.
+    // Нормально изменять idx, потому что это значение атомарно,
+    // тем самым оно не может вызвать гонку данных.
     other_idx.fetch_add(10, Ordering::SeqCst);
 });
 
-// Index with the value loaded from the atomic. This is safe because we
-// read the atomic memory only once, and then pass a copy of that value
-// to the Vec's indexing implementation. This indexing will be correctly
-// bounds checked, and there's no chance of the value getting changed
-// in the middle. However our program may panic if the thread we spawned
-// managed to increment before this ran. A race condition because correct
-// program execution (panicking is rarely correct) depends on order of
-// thread execution.
+// Индексируем значением, полученным из атомарного. Это безопасно, потому что мы
+// читаем атомарную память только один раз, и затем передаем копию этого  
+// значения в реализацию индексирования Vec. Это индексирование проверит  
+// корректность границ и шанс, что значение поменяется в середине выполнения, 
+// равен нулю. Но наша программа может вызвать панику если поток, который мы 
+// создали выполнит инкремент перед этим запуском. Условия для гонки во время 
+// корректного выполнения программы (паника очень редко правильна) зависит от 
+// порядка вызова потоков.
 println!("{}", data[idx.load(Ordering::SeqCst)]);
 ```
 
@@ -68,18 +69,18 @@ let data = vec![1, 2, 3, 4];
 let idx = Arc::new(AtomicUsize::new(0));
 let other_idx = idx.clone();
 
-// `move` captures other_idx by-value, moving it into this thread
+// `move` захватывает other_idx по-значению, передавая его в этот поток
 thread::spawn(move || {
-    // It's ok to mutate idx because this value
-    // is an atomic, so it can't cause a Data Race.
+    // Нормально изменять idx, потому что это значение атомарно,
+    // тем самым оно не может вызвать гонку данных.
     other_idx.fetch_add(10, Ordering::SeqCst);
 });
 
 if idx.load(Ordering::SeqCst) < data.len() {
     unsafe {
-        // Incorrectly loading the idx after we did the bounds check.
-        // It could have changed. This is a race condition, *and dangerous*
-        // because we decided to do `get_unchecked`, which is `unsafe`.
+        // Некорректная загрузка idx после выполнения проверки границ.
+        // Оно может поменяться. Это условие для гонки, *и это опасно*,
+        // потому что мы решили сделать `get_unchecked`, который `unsafe`.
         println!("{}", data.get_unchecked(idx.load(Ordering::SeqCst)));
     }
 }
