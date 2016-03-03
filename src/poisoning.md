@@ -1,35 +1,36 @@
-% Poisoning
+% Отравление
 
-Although all unsafe code *must* ensure it has minimal exception safety, not all
-types ensure *maximal* exception safety. Even if the type does, your code may
-ascribe additional meaning to it. For instance, an integer is certainly
-exception-safe, but has no semantics on its own. It's possible that code that
-panics could fail to correctly update the integer, producing an inconsistent
-program state.
+Хоть весь небезопасный код и *должен* гарантировать минимальную безопасность
+исключений, не все типы гарантируют *максимальную* безопасность исключений. Даже
+если тип гарантирует, ваш код может приписать дополнительное значение этому.
+Например, integer точно безопасен от исключений, но никакой семантики этого у
+него самого нет. Возможно, что код, вызывающий панику, не сможет корректно
+изменить integer, создав несогласованное состояние программы.
 
-This is *usually* fine, because anything that witnesses an exception is about
-to get destroyed. For instance, if you send a Vec to another thread and that
-thread panics, it doesn't matter if the Vec is in a weird state. It will be
-dropped and go away forever. However some types are especially good at smuggling
-values across the panic boundary.
+*Обычно* это нормально, потому что все, что вызвало исключение должно быть 
+уничтожено. Например, если вы посылаете Vec в другой поток и тот поток вызывает 
+панику, неважно в каком состоянии находится Vec. Он будет уничтожен и отброшен 
+навсегда. Но есть некоторые типы, которые особо хороши в контрабанде своих 
+значений через границы паники.
 
-These types may choose to explicitly *poison* themselves if they witness a panic.
-Poisoning doesn't entail anything in particular. Generally it just means
-preventing normal usage from proceeding. The most notable example of this is the
-standard library's Mutex type. A Mutex will poison itself if one of its
-MutexGuards (the thing it returns when a lock is obtained) is dropped during a
-panic. Any future attempts to lock the Mutex will return an `Err` or panic.
+Эти типы могут явно *отравить* себя, если становятся свидетелями паники.
+Отравление ничего не влечет за собой. Обычно это просто означает препятствие
+нормальной эксплуатации. Самым заметным примером этого является Mutex из
+стандартной библиотеки. Mutex отравится, если один из его MutexGuards (то, что
+он возвращает когда получает захват) удаляется во время паники. Все будущие
+попытки захватить Mutex вернут `Err` или панику.
 
-Mutex poisons not for true safety in the sense that Rust normally cares about. It
-poisons as a safety-guard against blindly using the data that comes out of a Mutex
-that has witnessed a panic while locked. The data in such a Mutex was likely in the
-middle of being modified, and as such may be in an inconsistent or incomplete state.
-It is important to note that one cannot violate memory safety with such a type
-if it is correctly written. After all, it must be minimally exception-safe!
+Mutex отравляется не для настоящей безопасности в том смысле, как обычно это
+понимает Rust. Он отравляется как охранник безопасности слепого использования
+пришедших во время паники данных пока Mutex был захвачен. Данные в таком Mutex
+были в каком-то промежуточном состоянии, и поэтому, возможно, являются
+несогласованными или незаконченными. Необходимо отметить, что нельзя нарушить
+безопасность памяти таким типом, если он корректно написан. В конце концов, он
+должен быть в минимальной безопасности исключений!
 
-However if the Mutex contained, say, a BinaryHeap that does not actually have the
-heap property, it's unlikely that any code that uses it will do
-what the author intended. As such, the program should not proceed normally.
-Still, if you're double-plus-sure that you can do *something* with the value,
-the Mutex exposes a method to get the lock anyway. It *is* safe, after all.
-Just maybe nonsense.
+Однако, если Mutex содержит, скажем, BinaryHeap, у которого на самом деле нет
+свойств кучи, не похоже, что любой код, использующий его, делает то, что
+задумывал автор. Поэтому программа не будет работать правильно. Итак, если вы
+дважды убедились, что вы можете сделать *что-то* со значением, Mutex
+предоставляет метод для получения захвата в любом случае. Это *безопасно*, в
+конце концов. Просто может быть чушью.
