@@ -1,177 +1,183 @@
-% References
+% Ссылки
 
-This section gives a high-level view of the memory model that *all* Rust
-programs must satisfy to be correct. Safe code is statically verified
-to obey this model by the borrow checker. Unsafe code may go above
-and beyond the borrow checker while still satisfying this model. The borrow
-checker may also be extended to allow more programs to compile, as long as
-this more fundamental model is satisfied.
+В этом разделе дается высокоуровневый взгляд на модель памяти, которой должны
+соответствовать *все* программы на Rust. Безопасный код статически проверяется
+на соответствие этой модели анализатором заимствований. Небезопасный код может
+выходить за рамки анализатора заимствований, если он соответствует этой модели.
+Анализатор заимствований можно расширить, позволив большему количеству программ
+компилироваться, пока они удовлетворяют самой основной модели.
 
-There are two kinds of reference:
+Существует два типа ссылок:
 
-* Shared reference: `&`
-* Mutable reference: `&mut`
+* Общая ссылка: `&`
+* Изменяемая ссылка: `&mut`
 
-Which obey the following rules:
+которые подчиняются следующим правилам:
 
-* A reference cannot outlive its referent
-* A mutable reference cannot be aliased
+* Ссылки не могут пережить то, на что ссылаются
+* Изменяемые ссылки не могут совпадать
 
-That's it. That's the whole model. Of course, we should probably define
-what *aliased* means. To define aliasing, we must define the notion of
-*paths* and *liveness*.
-
-
-**NOTE: The model that follows is generally agreed to be dubious and have
-issues. It's ok-ish as an intuitive model, but fails to capture the desired
-semantics. We leave this here to be able to use notions introduced here in later
-sections. This will be significantly changed in the future. TODO: do that.**
+Вот и все. Это вся модель. Конечно, нам надо определить, что означает
+*совпадение указателей*. Чтобы это сделать, мы должны определить значения
+*путей* и *живучести*.
 
 
-# Paths
-
-If all Rust had were values (no pointers), then every value would be uniquely
-owned by a variable or composite structure. From this we naturally derive a
-*tree* of ownership. The stack itself is the root of the tree, with every
-variable as its direct children. Each variable's direct children would be their
-fields (if any), and so on.
-
-From this view, every value in Rust has a unique *path* in the tree of
-ownership. Of particular interest are *ancestors* and *descendants*: if `x` owns
-`y`, then `x` is an ancestor of `y`, and `y` is a descendant of `x`. Note
-that this is an inclusive relationship: `x` is a descendant and ancestor of
-itself.
-
-We can then define references as simply *names* for paths. When you create a
-reference, you're declaring that an ownership path exists to this address
-of memory.
-
-Tragically, plenty of data doesn't reside on the stack, and we must also
-accommodate this. Globals and thread-locals are simple enough to model as
-residing at the bottom of the stack (though we must be careful with mutable
-globals). Data on the heap poses a different problem.
-
-If all Rust had on the heap was data uniquely owned by a pointer on the stack,
-then we could just treat such a pointer as a struct that owns the value on the
-heap. Box, Vec, String, and HashMap, are examples of types which uniquely
-own data on the heap.
-
-Unfortunately, data on the heap is not *always* uniquely owned. Rc for instance
-introduces a notion of *shared* ownership. Shared ownership of a value means
-there is no unique path to it. A value with no unique path limits what we can do
-with it.
-
-In general, only shared references can be created to non-unique paths. However
-mechanisms which ensure mutual exclusion may establish One True Owner
-temporarily, establishing a unique path to that value (and therefore all
-its children). If this is done, the value may be mutated. In particular, a
-mutable reference can be taken.
-
-The most common way to establish such a path is through *interior mutability*,
-in contrast to the *inherited mutability* that everything in Rust normally uses.
-Cell, RefCell, Mutex, and RWLock are all examples of interior mutability types.
-These types provide exclusive access through runtime restrictions.
-
-An interesting case of this effect is Rc itself: if an Rc has refcount 1,
-then it is safe to mutate or even move its internals. Note however that the
-refcount itself uses interior mutability.
-
-In order to correctly communicate to the type system that a variable or field of
-a struct can have interior mutability, it must be wrapped in an UnsafeCell. This
-does not in itself make it safe to perform interior mutability operations on
-that value. You still must yourself ensure that mutual exclusion is upheld.
+**Внимание: Приведённая ниже модель считается сомнительной и имеет проблемы. Она 
+нормальна для объяснения, но не в состоянии охватить всю семантику. 
+Оставим ее так для объяснения понятий, дающихся дальше в этой главе. Она 
+существенно поменяется в будущем. TODO: поменять ее.**
 
 
+# Пути
+
+Если бы у Rust были только значения (без указателей), тогда каждым значением
+владела бы одна переменная или составная структура. Из этого мы получаем *дерево*
+владения. Сам стек является корнем дерева, а каждая его переменная является
+прямым наследником. Прямыми наследниками каждой переменной будут её поля 
+(если они есть) и так далее.
+
+С этой точки зрения, каждому значению в Rust соответствует уникальный *путь* по
+дереву владения. Особый интерес представляют *предки* и *потомки*: если `x`
+владеет `y`, то `x` является предком `y`, а `y` потомком `x`. Заметьте, что это
+включительное отношение: `x` является предком и потомком самого себя.
+
+Мы можем определить ссылки как просто *названия* путей. Когда вы создаете
+ссылку, вы объявляете, что есть владеющий путь к этому адресу в памяти.
+
+К несчастью, множество данных живут не на стеке, а мы должны это учитывать.
+Глобальные переменные и переменные, локальные для потока (т.е. находящиеся в TLS),
+достаточно просты, и их можно разместить на дне стека в модели (хотя мы должны 
+быть осторожны с изменяемыми глобальными переменными). Данные же в куче обнажают 
+другие проблемы.
+
+Если бы в Rust в куче могли размещаться только данные, которыми уникально владеет 
+указатель на стеке, то мы могли бы просто трактовать такой указатель как структуру, 
+владеющую значением в куче. Box, Vec, String, и HashMap
+являются примерами типов, уникально владеющими данными в куче.
+
+К сожалению, у данных в куче не *всегда* есть один уникальный владелец. Rc, например,
+представляет собой вариант *общего* владения. Общее владение значением
+означает, что есть больше одного пути к нему. Значение, у которого больше
+одного пути к нему, ограничивает то, что можно с ним сделать.
+
+Итак, только общие ссылки могут быть созданы к неуникальным путям. Однако
+механизмы, гарантирующие взаимоисключение, могут временно обозначить Одного
+Настоящего Владельца, определив уникальный путь к этому значению (и, таким
+образом, к его детям). Если так получится, значение можно будет изменять. В
+частности, можно создать изменяемую ссылку на него.
+
+Наиболее распространенным способом является создание такого пути через
+*внутреннюю изменяемость*, которая отличается от *наследуемой изменяемости*,
+используемой обычно везде в Rust. Cell, RefCell, Mutex и RWLock - это все
+примеры типов с внутренней изменяемостью. Эти типы предоставляют эксклюзивный
+доступ с помощью проверок во время исполнения.
+
+Интересным случаем является Rc сам по себе: если у Rc счетчик ссылок равен
+1, то Rc можно безопасно изменять и даже перемещать его внутренние значения.
+Помните, однако, что счетчик ссылок сам по себе использует внутреннюю
+изменяемость.
+
+Чтобы правильно взаимодействовать с системой типов, которая позволяет переменным
+или полям структуры иметь внутреннюю изменяемость, необходимо обернуть все в
+UnsafeCell. Что само по себе не делает безопасным выполнение операции по
+внутренней изменяемости значений. Вы сами должны гарантировать, что обеспечите
+взаимоисключение изменений (например, из разных потоков).
 
 
-# Liveness
 
-Note: Liveness is not the same thing as a *lifetime*, which will be explained
-in detail in the next section of this chapter.
 
-Roughly, a reference is *live* at some point in a program if it can be
-dereferenced. Shared references are always live unless they are literally
-unreachable (for instance, they reside in freed or leaked memory). Mutable
-references can be reachable but *not* live through the process of *reborrowing*.
+# Живучесть
 
-A mutable reference can be reborrowed to either a shared or mutable reference to
-one of its descendants. A reborrowed reference will only be live again once all
-reborrows derived from it expire. For instance, a mutable reference can be
-reborrowed to point to a field of its referent:
+Внимание: Живучесть - это не то же самое, что и *время жизни*, которое
+объясняется детально в следующем разделе этой главы.
+
+Грубо говоря, ссылка *жива* в какой-то момент в программе, если ее можно
+разыменовать. Общие ссылки всегда живы, даже если они буквально недостижимы
+(например, они живут в освобожденной или утекшей памяти). Изменяемые ссылки могут
+быть достижимы, но не быть *живыми* во время процесса *передачи заимствования*.
+
+Изменяемая ссылка может передать заимствование в общую или в изменяемую ссылку
+одному из своих потомков. Ссылка с переданным заимствованием оживет заново,
+после того, как у всех производных от нее ссылок истечет время жизни. Например,
+изменяемая ссылка может передать заимствование полю объекта, на который
+она указывает:
 
 ```rust
 let x = &mut (1, 2);
 {
-    // reborrow x to a subfield
+    // передача заимствования под-полем x в y
     let y = &mut x.0;
-    // y is now live, but x isn't
+    // y теперь жива, а x нет
     *y = 3;
 }
-// y goes out of scope, so x is live again
+// y выходит из области видимости, поэтому x опять жива
 *x = (5, 7);
 ```
 
-It is also possible to reborrow into *multiple* mutable references, as long as
-they are *disjoint*: no reference is an ancestor of another. Rust
-explicitly enables this to be done with disjoint struct fields, because
-disjointness can be statically proven:
+Разрешается также передавать заимствование *несколькими* изменяемыми ссылками,
+если они *не пересекаются*: каждая ссылка не является предком другой. Rust
+позволяет явно делать это с помощью непересекающихся полей структур, потому что
+их разделение может быть статически доказано:
 
 ```rust
 let x = &mut (1, 2);
 {
-    // reborrow x to two disjoint subfields
+    // передача заимствования x двум непересекающимся под-полям
     let y = &mut x.0;
     let z = &mut x.1;
 
-    // y and z are now live, but x isn't
+    // y и z живы, но x нет
     *y = 3;
     *z = 4;
 }
-// y and z go out of scope, so x is live again
+// y и z выходят из области видимости, поэтому x опять жива
 *x = (5, 7);
 ```
 
-However it's often the case that Rust isn't sufficiently smart to prove that
-multiple borrows are disjoint. *This does not mean it is fundamentally illegal
-to make such a borrow*, just that Rust isn't as smart as you want.
+Однако, часто случается, что Rust недостаточно умен, чтобы доказать, что
+множественное заимствование не пересекается. *Это не означает, что
+фундаментально неправильно делать такое заимствование*, просто Rust не настолько
+умен, как вам бы хотелось.
 
-To simplify things, we can model variables as a fake type of reference: *owned*
-references. Owned references have much the same semantics as mutable references:
-they can be re-borrowed in a mutable or shared manner, which makes them no
-longer live. Live owned references have the unique property that they can be
-moved out of (though mutable references *can* be swapped out of). This power is
-only given to *live* owned references because moving its referent would of
-course invalidate all outstanding references prematurely.
+Для упрощения, мы можем представлять переменные, как ссылки несуществующего
+типа: *обладаемые* ссылки. Обладаемые ссылки похожи семантикой на изменяемые
+ссылки: они могут передавать заимствование также как и изменяемые и общие
+ссылки, заканчивая жить после этого. Живые обладаемые ссылки обладают уникальным
+свойством того, что из них можно перемещать значение (хотя значение из изменяемых 
+ссылок *можно* заменить другим). Эта сила дается только *живым* обладаемым ссылкам, 
+потому что перемещение того, на что они указывают, преждевременно сделало бы все 
+внешние ссылки недействительными.
 
-As a local lint against inappropriate mutation, only variables that are marked
-as `mut` can be borrowed mutably.
+Благодаря локальному статическому анализу на правильность изменяемости, только
+переменные, помеченные `mut` могут быть заимствованы изменяемыми.
 
-It is interesting to note that Box behaves exactly like an owned reference. It
-can be moved out of, and Rust understands it sufficiently to reason about its
-paths like a normal variable.
-
-
+Интересно отметить, что Box ведет себя также как обладаемая ссылка. То, на что он
+указывает, можно переместить, и Rust достаточно умен, чтобы рассуждать о пути к
+нему, как об обычной переменной.
 
 
-# Aliasing
 
-With liveness and paths defined, we can now properly define *aliasing*:
 
-**A mutable reference is aliased if there exists another live reference to one
-of its ancestors or descendants.**
+# Совпадение указателей
 
-(If you prefer, you may also say the two live references alias *each other*.
-This has no semantic consequences, but is probably a more useful notion when
-verifying the soundness of a construct.)
+Определив живучесть и путь, можем перейти к определению *совпадения указателей*:
 
-That's it. Super simple right? Except for the fact that it took us two pages to
-define all of the terms in that definition. You know: Super. Simple.
+**У изменяемой ссылки совпадает указатель с другой ссылкой, если существует хотя
+бы одна другая живая ссылка на один из ее предков или потомков.**
 
-Actually it's a bit more complicated than that. In addition to references, Rust
-has *raw pointers*: `*const T` and `*mut T`. Raw pointers have no inherent
-ownership or aliasing semantics. As a result, Rust makes absolutely no effort to
-track that they are used correctly, and they are wildly unsafe.
+(Если хотите, можете сказать, что у двух живых ссылок совпадают указатели *друг
+с другом*. На семантике это не сказывается, но, вероятно, так будет понятнее для
+проверки корректности кода.)
 
-**It is an open question to what degree raw pointers have alias semantics.
-However it is important for these definitions to be sound that the existence of
-a raw pointer does not imply some kind of live path.**
+Вот и все. Очень просто, правда? За исключением того, что нам пришлось на двух
+страницах определять все термины для этого. Ну, знаете: это Очень Просто.
+
+На самом деле все немного сложнее. Помимо ссылок в Rust есть *сырые указатели*:
+`*const T` и `*mut T`. У них нет наследуемого владения или семантики совпадения
+указателей. В результате, Rust не делает абсолютно никаких попыток отследить,
+что они правильно используются, и они дико небезопасны.
+
+**Это еще открытый вопрос, под каким углом зрения сырые указатели определяются
+относительно семантики совпадения указателей. Но важно, чтобы в этом определении
+было обоснованно, что существование сырого указателя не подразумевает некоего
+живого пути**

@@ -1,6 +1,6 @@
-% Limits of Lifetimes
+% Границы времени жизни
 
-Given the following code:
+У нас есть следующий код:
 
 ```rust,ignore
 struct Foo;
@@ -17,11 +17,12 @@ fn main() {
 }
 ```
 
-One might expect it to compile. We call `mutate_and_share`, which mutably borrows
-`foo` temporarily, but then returns only a shared reference. Therefore we
-would expect `foo.share()` to succeed as `foo` shouldn't be mutably borrowed.
+Ожидаем, что он компилируется. Мы вызываем `mutate_and_share`, который временно
+заимствует `foo` как изменяемую ссылку, но затем возвращает только как общую
+ссылку. Поэтому мы ожидаем, что `foo.share()` выполнится успешно, ведь `foo` уже
+не должна быть заимствована как изменяемая ссылка.
 
-However when we try to compile it:
+Однако, когда мы попытаемся выполнить компиляцию:
 
 ```text
 <anon>:11:5: 11:8 error: cannot borrow `foo` as immutable because it is also borrowed as mutable
@@ -39,9 +40,8 @@ However when we try to compile it:
           ^
 ```
 
-What happened? Well, we got the exact same reasoning as we did for
-[Example 2 in the previous section][ex2]. We desugar the program and we get
-the following:
+Что произошло? Ну, причина все та же, что и в [примере 2 из предыдущей
+секции][ex2]. Уберем синтаксический сахар из программы и получим следующее:
 
 ```rust,ignore
 struct Foo;
@@ -64,16 +64,17 @@ fn main() {
 }
 ```
 
-The lifetime system is forced to extend the `&mut foo` to have lifetime `'c`,
-due to the lifetime of `loan` and mutate_and_share's signature. Then when we
-try to call `share`, and it sees we're trying to alias that `&'c mut foo` and
-blows up in our face!
+Система времени жизни вынуждена продлить время жизни `&mut foo` до времени `'c`
+из-за времени жизни `loan` и сигнатуры mutate_and_share. Дальше, когда мы
+пытаемся вызвать `share`, и она видит, что мы пытаемся взять ту же ссылку, что и
+`&'c mut foo`, все взрывается у нас на глазах!
 
-This program is clearly correct according to the reference semantics we actually
-care about, but the lifetime system is too coarse-grained to handle that.
+Программа абсолютно корректна в части семантики ссылок, о которой мы на самом
+деле заботимся, но система времени жизни слишком крупнозерниста, чтобы понять
+это.
 
 
-TODO: other common problems? SEME regions stuff, mostly?
+TODO: другие общие проблемы? SEME regions stuff, mostly?
 
 
 
