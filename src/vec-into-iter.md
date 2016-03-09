@@ -1,46 +1,46 @@
 % IntoIter
 
-Let's move on to writing iterators. `iter` and `iter_mut` have already been
-written for us thanks to The Magic of Deref. However there's two interesting
-iterators that Vec provides that slices can't: `into_iter` and `drain`.
+Продвинемся к написанию итераторов. `iter` и `iter_mut` уже написаны для нас,
+спасибо Магии Deref. Однако еще два интересных итератора предоставляются Vec,
+которые не могут предоставить срезы: `into_iter` и `drain`.
 
-IntoIter consumes the Vec by-value, and can consequently yield its elements
-by-value. In order to enable this, IntoIter needs to take control of Vec's
-allocation.
+IntoIter потребляет Vec по значению, и, следовательно, может пройтись по его
+элементам по значению. Для этого IntoIter должен взять контроль над размещением
+в памяти Vec.
 
-IntoIter needs to be DoubleEnded as well, to enable reading from both ends.
-Reading from the back could just be implemented as calling `pop`, but reading
-from the front is harder. We could call `remove(0)` but that would be insanely
-expensive. Instead we're going to just use ptr::read to copy values out of
-either end of the Vec without mutating the buffer at all.
+IntoIter к тому же должен быть двусторонним, чтобы уметь читать с обоих
+концов. Чтение с конца можно реализовать вызовом `pop`, чтение с начала
+гораздо труднее. Мы могли бы вызывать `remove(0)`, но это было бы чрезвычайно
+дорого. Вместо этого мы просто используем `ptr::read`, чтобы скопировать значение
+с любого конца Vec, вообще не изменяя буфер.
 
-To do this we're going to use a very common C idiom for array iteration. We'll
-make two pointers; one that points to the start of the array, and one that
-points to one-element past the end. When we want an element from one end, we'll
-read out the value pointed to at that end and move the pointer over by one. When
-the two pointers are equal, we know we're done.
+Для этого используем очень популярную идиому Си по итерации массива. Сделаем два
+указателя; один, указывающий на начало массива, и один, указывающий на элемент
+после конца массива. Если нам нужен элемент с одной стороны, мы читаем
+значение указателя и сдвигаем указатель на единицу. Когда два указателя
+эквивалентны, мы знаем, что закончили.
 
-Note that the order of read and offset are reversed for `next` and `next_back`
-For `next_back` the pointer is always after the element it wants to read next,
-while for `next` the pointer is always at the element it wants to read next.
-To see why this is, consider the case where every element but one has been
-yielded.
+Заметьте, что порядок чтения и сдвига противоположны для `next` и `next_back`.
+Для `next_back` указатель всегда указывает на элемент после того, который ему
+нужно прочитать, а для `next` - всегда на элемент, который он хочет следующим
+прочитать. Чтобы понять почему это так, предположим случай, в котором каждый
+элемент кроме одного был пройден.
 
-The array looks like this:
+Массив выглядит так:
 
 ```text
           S  E
 [X, X, X, O, X, X, X]
 ```
 
-If E pointed directly at the element it wanted to yield next, it would be
-indistinguishable from the case where there are no more elements to yield.
+Если E указывал бы напрямую на элемент, который надо пройти следующим, то этот
+случай был бы не отличим от случая, когда элементов больше нет.
 
-Although we don't actually care about it during iteration, we also need to hold
-onto the Vec's allocation information in order to free it once IntoIter is
-dropped.
+Несмотря на то, что мы на самом деле не волнуемся о расположении Vec в памяти во
+время итерации, нам также надо владеть информацией об этом, чтобы освободить
+память во время освобождения IntoIter.
 
-So we're going to use the following struct:
+Итак, используем следующую структуру:
 
 ```rust,ignore
 struct IntoIter<T> {
@@ -51,17 +51,17 @@ struct IntoIter<T> {
 }
 ```
 
-And this is what we end up with for initialization:
+И вот с чем мы заканчиваем инициализацию:
 
 ```rust,ignore
 impl<T> Vec<T> {
     fn into_iter(self) -> IntoIter<T> {
-        // Can't destructure Vec since it's Drop
+        // Нельзя деструктурировать Vec из-за того, что он Drop
         let ptr = self.ptr;
         let cap = self.cap;
         let len = self.len;
 
-        // Make sure not to drop Vec since that will free the buffer
+        // Убеждаемся, что не освобождаем Vec, из-за того что он освободит буфер
         mem::forget(self);
 
         unsafe {
@@ -70,7 +70,7 @@ impl<T> Vec<T> {
                 cap: cap,
                 start: *ptr,
                 end: if cap == 0 {
-                    // can't offset off this pointer, it's not allocated!
+                    // нельзя сместить этот указатель, он не расположен в памяти!
                     *ptr
                 } else {
                     ptr.offset(len as isize)
@@ -81,7 +81,7 @@ impl<T> Vec<T> {
 }
 ```
 
-Here's iterating forward:
+Вот итератор с начала:
 
 ```rust,ignore
 impl<T> Iterator for IntoIter<T> {
@@ -106,7 +106,7 @@ impl<T> Iterator for IntoIter<T> {
 }
 ```
 
-And here's iterating backwards.
+А вот с конца.
 
 ```rust,ignore
 impl<T> DoubleEndedIterator for IntoIter<T> {
@@ -123,16 +123,16 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 }
 ```
 
-Because IntoIter takes ownership of its allocation, it needs to implement Drop
-to free it. However it also wants to implement Drop to drop any elements it
-contains that weren't yielded.
+Из-за того, что IntoIter забирает владение своего места расположения, необходимо
+реализовать Drop для его освобождения. Но также надо реализовать Drop,
+чтобы освободить те элементы, которые еще не были пройдены.
 
 
 ```rust,ignore
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
         if self.cap != 0 {
-            // drop any remaining elements
+            // освобождаем все оставшиеся элементы
             for _ in &mut *self {}
 
             let align = mem::align_of::<T>();
