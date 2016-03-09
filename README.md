@@ -16,7 +16,7 @@ https://github.com/rust-lang/rust/tree/master/src/doc/nomicon
 веб-страниц, но её можно читать прямо на GitHub (с определёнными неудобствами).
 Вот [содержание][summary], и оттуда можно переходить на все остальные разделы.
 
-[summary]: https://github.com/mkpankov/rustonomicon/blob/master/src/SUMMARY.md
+[summary]: https://github.com/ruRust/rustonomicon/blob/master/src/SUMMARY.md
 
 # Темное искусство продвинутого и небезопасного программирования на Rust
 
