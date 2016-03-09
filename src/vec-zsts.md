@@ -1,45 +1,47 @@
-% Handling Zero-Sized Types
+% Обработка типов нулевого размера
 
-It's time. We're going to fight the specter that is zero-sized types. Safe Rust
-*never* needs to care about this, but Vec is very intensive on raw pointers and
-raw allocations, which are exactly the two things that care about
-zero-sized types. We need to be careful of two things:
+Пришло время. Начнем бороться с чудищем, называемым типами нулевого размера.
+Безопасному Rust *никогда* не нужно волноваться об этом, а вот Vec очень
+интенсивно использует сырые указатели и сырое выделение места, именно которым и
+надо заботиться о ТНР. Надо быть осторожным в двух вещах:
 
-* The raw allocator API has undefined behavior if you pass in 0 for an
-  allocation size.
-* raw pointer offsets are no-ops for zero-sized types, which will break our
-  C-style pointer iterator.
+* API сырого распределения места вызовет неопределенное поведение при передаче 
+0 в качестве размера выделяемого места.
+* Сдвиги сырых указателей являются пустыми операциями для ТНР, что сломает наш 
+Си-подобный итератор указателей.
 
-Thankfully we abstracted out pointer-iterators and allocating handling into
-RawValIter and RawVec respectively. How mysteriously convenient.
+Спасибо, мы абстрагировали наши итераторы по указателям и обработку
+распределения места в RawValIter и RawVec заранее. Как неожиданно удобно
+получилось.
 
 
 
 
-## Allocating Zero-Sized Types
+## Размещение типов нулевого размера
 
-So if the allocator API doesn't support zero-sized allocations, what on earth
-do we store as our allocation? Why, `heap::EMPTY` of course! Almost every operation
-with a ZST is a no-op since ZSTs have exactly one value, and therefore no state needs
-to be considered to store or load them. This actually extends to `ptr::read` and
-`ptr::write`: they won't actually look at the pointer at all. As such we never need
-to change the pointer.
+Итак, если API аллокатора не поддерживает выделение памяти нулевого размера, что
+же нам хранить в нашей выделенной памяти? Ну что ж, `heap::EMPTY`, конечно!
+Почти любая операция с ТНР является пустой операцией из-за того, что у ТНР
+только одно значение, и, следовательно, не нужно предусматривать ни состояние
+изменения, ни состояние хранения. Это на самом деле распространяется на
+`ptr::read` и `ptr::write`: они вообще не смотрят на указатель. Поэтому им
+никогда не придется менять указатель.
 
-Note however that our previous reliance on running out of memory before overflow is
-no longer valid with zero-sized types. We must explicitly guard against capacity
-overflow for zero-sized types.
+Заметим, однако, что мы больше не можем надеется на возникновение нехватки
+памяти до переполнения в случае ТНР. Мы должны явно защититься от переполнения
+емкости для ТНР.
 
-Due to our current architecture, all this means is writing 3 guards, one in each
-method of RawVec.
+По нашей текущей архитектуре это означает написание 3 охраняющих условий, по
+одному в каждый метод RawVec.
 
 ```rust,ignore
 impl<T> RawVec<T> {
     fn new() -> Self {
         unsafe {
-            // !0 is usize::MAX. This branch should be stripped at compile time.
+            // !0 это usize::MAX. Эта ветка удалится во время исполнения.
             let cap = if mem::size_of::<T>() == 0 { !0 } else { 0 };
 
-            // heap::EMPTY doubles as "unallocated" and "zero-sized allocation"
+            // heap::EMPTY служит как для "невыделения", так и для "выделения нулевого размера"
             RawVec { ptr: Unique::new(heap::EMPTY as *mut T), cap: cap }
         }
     }
@@ -48,8 +50,8 @@ impl<T> RawVec<T> {
         unsafe {
             let elem_size = mem::size_of::<T>();
 
-            // since we set the capacity to usize::MAX when elem_size is
-            // 0, getting to here necessarily means the Vec is overfull.
+            // из-за того, что мы установили емкость в usize::MAX если elem_size равен
+            // 0, то попадание сюда обозначает, что Vec переполнен.
             assert!(elem_size != 0, "capacity overflow");
 
             let align = mem::align_of::<T>();
@@ -66,7 +68,7 @@ impl<T> RawVec<T> {
                 (new_cap, ptr)
             };
 
-            // If allocate or reallocate fail, we'll get `null` back
+            // Если выделение или перераспределение памяти возвращается с ошибкой, получим `null`
             if ptr.is_null() { oom() }
 
             self.ptr = Unique::new(ptr as *mut _);
@@ -79,7 +81,7 @@ impl<T> Drop for RawVec<T> {
     fn drop(&mut self) {
         let elem_size = mem::size_of::<T>();
 
-        // don't free zero-sized allocations, as they were never allocated.
+        // не освобождаем выделения нулевого размера, потому что выделение никогда не происходило .
         if self.cap != 0 && elem_size != 0 {
             let align = mem::align_of::<T>();
 
@@ -92,18 +94,18 @@ impl<T> Drop for RawVec<T> {
 }
 ```
 
-That's it. We support pushing and popping zero-sized types now. Our iterators
-(that aren't provided by slice Deref) are still busted, though.
+Вот и все. Теперь мы добавили поддержка push и pop для ТНР. Хотя наши итераторы 
+(не предоствляемые срезом Deref) все еще не работают.
 
 
 
 
-## Iterating Zero-Sized Types
+## Итерирование по типам нулевого размера
 
-Zero-sized offsets are no-ops. This means that our current design will always
-initialize `start` and `end` as the same value, and our iterators will yield
-nothing. The current solution to this is to cast the pointers to integers,
-increment, and then cast them back:
+Смещения нулевого размера являются пустыми операциями. Это означает, что в нашем
+текущем проекте мы всегда будем инициализировать `start` и `end` одним и тем же
+значением, и наши итераторы ничего не вернут. Хорошим решением будет явно
+привести указатели к целым, увеличивать их, и затем явно приводить их обратно:
 
 ```rust,ignore
 impl<T> RawValIter<T> {
@@ -122,11 +124,11 @@ impl<T> RawValIter<T> {
 }
 ```
 
-Now we have a different bug. Instead of our iterators not running at all, our
-iterators now run *forever*. We need to do the same trick in our iterator impls.
-Also, our size_hint computation code will divide by 0 for ZSTs. Since we'll
-basically be treating the two pointers as if they point to bytes, we'll just
-map size 0 to divide by 1.
+Теперь у нас другая ошибка. Вместо того, когда наши итераторы вообще не
+запускались, теперь они выполняются *вечно*. Необходимо сделать тот же трюк в
+реализации итераторов. Также, наш код вычисления size_hint будет вызывать
+деление на 0 в случае ТНР. Мы считаем, что два указателя ссылаются на байты,
+поэтому просто подставим деление на 1 в случае нулевого размера.
 
 ```rust,ignore
 impl<T> Iterator for RawValIter<T> {
@@ -173,4 +175,4 @@ impl<T> DoubleEndedIterator for RawValIter<T> {
 }
 ```
 
-And that's it. Iteration works!
+И все. Итерация работает!
