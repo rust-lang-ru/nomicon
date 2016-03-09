@@ -1,15 +1,15 @@
-% Deref
+% Разыменование
 
-Alright! We've got a decent minimal stack implemented. We can push, we can
-pop, and we can clean up after ourselves. However there's a whole mess of
-functionality we'd reasonably want. In particular, we have a proper array, but
-none of the slice functionality. That's actually pretty easy to solve: we can
-implement `Deref<Target=[T]>`. This will magically make our Vec coerce to, and
-behave like, a slice in all sorts of conditions.
+Отлично! Мы реализовали приличный минимальный стек. Можем делать push, можем
+делать pop, и можем подчищать за собой. Однако, нам нужен еще приличный объем
+функциональности. В частности, у нас есть функциональность массива, но никакой
+функциональности среза. Это довольно просто решить: можем реализовать
+`Deref<Target=[T]>`. Он магическим образом заставит наш Vec неявно приводится и
+вести себя как срез в любых условиях.
 
-All we need is `slice::from_raw_parts`. It will correctly handle empty slices
-for us. Later once we set up zero-sized type support it will also Just Work
-for those too.
+Все, что нам нужно - `slice::from_raw_parts`. Он будет корректно обрабатывать
+пустые срезы для нас. А также, раз мы добавили поддержку ТНР, он будет Просто
+Работать и для них.
 
 ```rust,ignore
 use std::ops::Deref;
@@ -24,7 +24,7 @@ impl<T> Deref for Vec<T> {
 }
 ```
 
-And let's do DerefMut too:
+И сделаем DerefMut тоже:
 
 ```rust,ignore
 use std::ops::DerefMut;
@@ -38,5 +38,5 @@ impl<T> DerefMut for Vec<T> {
 }
 ```
 
-Now we have `len`, `first`, `last`, indexing, slicing, sorting, `iter`,
-`iter_mut`, and all other sorts of bells and whistles provided by slice. Sweet!
+Теперь у нас есть `len`, `first`, `last`, индексирование, нарезка, сортировка,
+`iter`, `iter_mut` и все другие примочки среза. Мило!
