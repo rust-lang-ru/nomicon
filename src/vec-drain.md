@@ -1,16 +1,16 @@
 % Drain
 
-Let's move on to Drain. Drain is largely the same as IntoIter, except that
-instead of consuming the Vec, it borrows the Vec and leaves its allocation
-untouched. For now we'll only implement the "basic" full-range version.
+Перейдем к Drain. Drain очень похож на IntoIter, за исключением того, что он не
+потребляет Vec, а заимствует Vec и оставляет ее расположение в памяти
+нетронутым. Для начала реализуем только "базовую" полноразмерную версию.
 
 ```rust,ignore
 use std::marker::PhantomData;
 
 struct Drain<'a, T: 'a> {
-    // Need to bound the lifetime here, so we do it with `&'a mut Vec<T>`
-    // because that's semantically what we contain. We're "just" calling
-    // `pop()` and `remove(0)`.
+    // Нужно ограничить время жизни, поэтому делаем это с помощью `&'a mut Vec<T>`
+    // потому что семантически именно это и содержится. Мы "просто" вызываем
+    // `pop()` и `remove(0)`.
     vec: PhantomData<&'a mut Vec<T>>
     start: *const T,
     end: *const T,
@@ -23,8 +23,8 @@ impl<'a, T> Iterator for Drain<'a, T> {
             None
 ```
 
--- wait, this is seeming familiar. Let's do some more compression. Both
-IntoIter and Drain have the exact same structure, let's just factor it out.
+-- постойте, кажется это уже было. Выполним еще сжатие логики. И IntoIter и 
+Drain имеют одну и ту же структуру, просто вынесем ее.
 
 ```rust
 struct RawValIter<T> {
@@ -33,17 +33,16 @@ struct RawValIter<T> {
 }
 
 impl<T> RawValIter<T> {
-    // unsafe to construct because it has no associated lifetimes.
-    // This is necessary to store a RawValIter in the same struct as
-    // its actual allocation. OK since it's a private implementation
-    // detail.
+    // небезопасно создавать, потому что нет связанных времен жизни.
+    // Важно хранить RawValIter в той же структуре, что и ее настоящее 
+    // размещение. OK, ведь это детали нашей частной реализации.
     unsafe fn new(slice: &[T]) -> Self {
         RawValIter {
             start: slice.as_ptr(),
             end: if slice.len() == 0 {
-                // if `len = 0`, then this is not actually allocated memory.
-                // Need to avoid offsetting because that will give wrong
-                // information to LLVM via GEP.
+                // если `len = 0`, то это не настоящее место размещения.
+                // Нужно избежать сдвига, потому что это даст неправильную
+                // информацию LLVM через GEP.
                 slice.as_ptr()
             } else {
                 slice.as_ptr().offset(slice.len() as isize)
@@ -52,14 +51,14 @@ impl<T> RawValIter<T> {
     }
 }
 
-// Iterator and DoubleEndedIterator impls identical to IntoIter.
+// Iterator и DoubleEndedIterator реализуются аналогично IntoIter.
 ```
 
-And IntoIter becomes the following:
+А IntoIter станет следующим:
 
 ```rust,ignore
 pub struct IntoIter<T> {
-    _buf: RawVec<T>, // we don't actually care about this. Just need it to live.
+    _buf: RawVec<T>, // нам не нужно волноваться об этом. Просто нужно, чтобы это жило.
     iter: RawValIter<T>,
 }
 
@@ -96,12 +95,13 @@ impl<T> Vec<T> {
 }
 ```
 
-Note that I've left a few quirks in this design to make upgrading Drain to work
-with arbitrary subranges a bit easier. In particular we *could* have RawValIter
-drain itself on drop, but that won't work right for a more complex Drain.
-We also take a slice to simplify Drain initialization.
+Заметьте, что я оставил несколько причудливых мест в дизайне, чтобы сделать
+модернизацию Drain по работе с произвольными поддиапазонами немного проще. В
+частности мы *могли бы* сделать, чтобы RawValIter выполнял drain самого себя при
+освобождении, но это не будет работать правильно для более сложного Drain. Также
+возьмем срез для упрощения инициализации Drain.
 
-Alright, now Drain is really easy:
+Итак, теперь Drain по-настоящему прост:
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -132,9 +132,9 @@ impl<T> Vec<T> {
         unsafe {
             let iter = RawValIter::new(&self);
 
-            // this is a mem::forget safety thing. If Drain is forgotten, we just
-            // leak the whole Vec's contents. Also we need to do this *eventually*
-            // anyway, so why not do it now?
+            // это безопасный mem::forget. Если Drain забыт, у нас просто утечет
+            // все содержимое Vec. К тому же нам нужно сделать это со *временем*
+            // в любом случае, так почему не сделать это сейчас?
             self.len = 0;
 
             Drain {
@@ -146,7 +146,6 @@ impl<T> Vec<T> {
 }
 ```
 
-For more details on the `mem::forget` problem, see the
-[section on leaks][leaks].
+Для деталей по проблеме `mem::forget`, смотри [раздел по утечкам][leaks].
 
 [leaks]: leaking.html
