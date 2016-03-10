@@ -1,36 +1,35 @@
-% Unbounded Lifetimes
+% Безграничные времена жизни
 
-Unsafe code can often end up producing references or lifetimes out of thin air.
-Such lifetimes come into the world as *unbounded*. The most common source of this
-is dereferencing a raw pointer, which produces a reference with an unbounded lifetime.
-Such a lifetime becomes as big as context demands. This is in fact more powerful
-than simply becoming `'static`, because for instance `&'static &'a T`
-will fail to typecheck, but the unbound lifetime will perfectly mold into
-`&'a &'a T` as needed. However for most intents and purposes, such an unbounded
-lifetime can be regarded as `'static`.
+Небезопасный код часто может создавать ссылки или времена жизни из воздуха.
+Такие времена рождаются *безграничными*. Основным источником этого является
+разыменование сырого указателя, создающее ссылку с безграничным временем жизни.
+Такое время устанавливается соответствующим контексту. На самом деле
+оно даже мощнее, чем просто `'static`, потому что, например, `&'static &'a T` не
+пройдет проверку типов, а безграничное время жизни спокойно превратится в `&'a
+&'a T`, если это необходимо. Однако, в большинстве случаев, безграничное время
+жизни можно рассматривать как `'static`.
 
-Almost no reference is `'static`, so this is probably wrong. `transmute` and
-`transmute_copy` are the two other primary offenders. One should endeavor to
-bound an unbounded lifetime as quick as possible, especially across function
-boundaries.
+У нас почти нет ссылок с временем жизни `'static`, поэтому, возможно, последнее
+утверждение и неверно. `transmute` и`transmute_copy` являются двумя другими
+основными нарушителями этого. Следует прилагать все усилия, чтобы как можно
+быстрее ограничить такие безграничные времена жизни, в особенности это касается
+пересечения границ функций.
 
-Given a function, any output lifetimes that don't derive from inputs are
-unbounded. For instance:
+В описании функции любые времена жизни на выходе, которые нельзя вывести
+из времен на входе, будут безграничными. Например:
 
 ```rust,ignore
 fn get_str<'a>() -> &'a str;
 ```
 
-will produce an `&str` with an unbounded lifetime. The easiest way to avoid
-unbounded lifetimes is to use lifetime elision at the function boundary.
-If an output lifetime is elided, then it *must* be bounded by an input lifetime.
-Of course it might be bounded by the *wrong* lifetime, but this will usually
-just cause a compiler error, rather than allow memory safety to be trivially
-violated.
+создаст `&str` с безграничным временем жизни. Самым простым способом избежать
+этого будет использовать опускание времени жизни на границе функции. Если время жизни на выходе
+опущено, то оно *должно* быть ограничено временем жизни на входе. Конечно,
+возможно, оно будет ограничено *неправильно*, но это скорее вызовет просто
+ошибку компиляции, но не нарушит безопасность памяти.
 
-Within a function, bounding lifetimes is more error-prone. The safest and easiest
-way to bound a lifetime is to return it from a function with a bound lifetime.
-However if this is unacceptable, the reference can be placed in a location with
-a specific lifetime. Unfortunately it's impossible to name all lifetimes involved
-in a function.
-
+Внутри функции ограниченные времена жизни больше подвержены ошибкам. Самым
+безопасным и простым способом ограничить время жизни будет вернуть его из
+функции с ограниченным временем жизни. Но, если это невозможно, то ссылку можно
+разместить в позиции, у которого указано конкретное время жизни. К сожалению,
+невозможно именовать все времена жизни используемые внутри функции.

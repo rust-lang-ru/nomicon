@@ -1,7 +1,7 @@
-% Higher-Rank Trait Bounds (HRTBs)
+% Ограничения типажей высшего порядка (ОТВП, Higher-Rank Trait Bounds (HRTBs))
 
-Rust's `Fn` traits are a little bit magic. For instance, we can write the
-following code:
+Типажи `Fn` в Rust - это уличная магия. Например, мы можем написать
+следующий код:
 
 ```rust
 struct Closure<F> {
@@ -25,8 +25,8 @@ fn main() {
 }
 ```
 
-If we try to naively desugar this code in the same way that we did in the
-lifetimes section, we run into some trouble:
+Если мы попытаемся убрать синтаксический сахар так же, как мы делали в предыдущих
+секциях, у нас возникнут проблемы:
 
 ```rust,ignore
 struct Closure<F> {
@@ -52,22 +52,22 @@ fn main() {
 }
 ```
 
-How on earth are we supposed to express the lifetimes on `F`'s trait bound? We
-need to provide some lifetime there, but the lifetime we care about can't be
-named until we enter the body of `call`! Also, that isn't some fixed lifetime;
-`call` works with *any* lifetime `&self` happens to have at that point.
+Каким же образом нам выразить границы времени жизни типажа `F`? Мы должны
+предложить какое-нибудь время жизни, однако, оно не будет известно до тех пор
+пока мы не войдем в тело `call`! К тому же, это не какое-то фиксированное время;
+`call` работает с *любым* временем жизни, которое будет у `&self` в этот момент.
 
-This job requires The Magic of Higher-Rank Trait Bounds (HRTBs). The way we
-desugar this is as follows:
+Такая работа требует магии ограничения типажей высшего порядка (ОТВП). Убрать
+синтаксический сахар можно так:
 
 ```rust,ignore
 where for<'a> F: Fn(&'a (u8, u16)) -> &'a u8,
 ```
 
-(Where `Fn(a, b, c) -> d` is itself just sugar for the unstable *real* `Fn`
-trait)
+(где `Fn(a, b, c) -> d` - это сам по себе сахар для нестабильного *настоящего*
+ типажа `Fn`)
 
-`for<'a>` can be read as "for all choices of `'a`", and basically produces an
-*infinite list* of trait bounds that F must satisfy. Intense. There aren't many
-places outside of the `Fn` traits where we encounter HRTBs, and even for
-those we have a nice magic sugar for the common cases.
+`for<'a>` можно прочитать как "для всех возможных `'a`", и в общем случае это
+создаст *бесконечный список* границ типажа, которым должен соответствовать F.
+Сильно. Помимо типажей `Fn` есть не так уж много мест, где мы можем встретить ОТВП.
+И даже в этих случаях чаще всего нам поможет синтаксический сахар.

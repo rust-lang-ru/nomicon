@@ -1,12 +1,13 @@
-% Drop Check
+% Проверка сброса
 
-We have seen how lifetimes provide us some fairly simple rules for ensuring
-that we never read dangling references. However up to this point we have only ever
-interacted with the *outlives* relationship in an inclusive manner. That is,
-when we talked about `'a: 'b`, it was ok for `'a` to live *exactly* as long as
-`'b`. At first glance, this seems to be a meaningless distinction. Nothing ever
-gets dropped at the same time as another, right? This is why we used the
-following desugaring of `let` statements:
+Мы посмотрели, как времена жизни предоставляют нам простые правила,
+гарантирующие что мы никогда не прочитаем висячий указатель. Однако до этого 
+момента мы имели дело только с отношениями вида, *`'a` переживает `'b`*, которые 
+сформулированы включительно. То есть, когда мы говорим о `'a: 'b`, то 
+в порядке вещей для `'a` жить *ровно* столько же сколько `'b`. На первый взгляд 
+различие кажется бессмысленным. Ничего же не удаляется одновременно с другим, 
+правда? Вот почему мы используем утверждение `let` без синтаксического сахара 
+следующим образом:
 
 ```rust,ignore
 let x;
@@ -22,28 +23,28 @@ let y;
 }
 ```
 
-Each creates its own scope, clearly establishing that one drops before the
-other. However, what if we do the following?
+Каждое `let` создает свою область видимости, ясно утверждая, что одно удаляется
+после другого. Но что если мы сделаем так?
 
 ```rust,ignore
 let (x, y) = (vec![], vec![]);
 ```
 
-Does either value strictly outlive the other? The answer is in fact *no*,
-neither value strictly outlives the other. Of course, one of x or y will be
-dropped before the other, but the actual order is not specified. Tuples aren't
-special in this regard; composite structures just don't guarantee their
-destruction order as of Rust 1.0.
+Живет ли одно значение дольше другого? Ответ, *нет*, ни одно значение не живет
+дольше другого. Конечно, или x, или y удалится одно после другого, но сам порядок не
+указан. Кортежи не одиноки в этом вопросе; составные структуры тоже не
+гарантируют порядок своего удаления, начиная с Rust 1.0.
 
-We *could* specify this for the fields of built-in composites like tuples and
-structs. However, what about something like Vec? Vec has to manually drop its
-elements via pure-library code. In general, anything that implements Drop has
-a chance to fiddle with its innards during its final death knell. Therefore
-the compiler can't sufficiently reason about the actual destruction order
-of the contents of any type that implements Drop.
+Мы *могли бы* указать его для полей встроенных составных объектов, таких, как кортежи
+или структуры. Но что насчет Vec или чего-то похожего? Vec приходится вручную
+удалять элементы посредством кода из библиотеки. В общем случае, все, что
+реализует Drop, имеет возможность повозиться со своими внутренностями во время
+похоронного звона. Поэтому компилятор не может достаточно точно определить
+порядок удаления типа, реализующего Drop.
 
-So why do we care? We care because if the type system isn't careful, it could
-accidentally make dangling pointers. Consider the following simple program:
+Ну, а нам то какая разница? На самом деле это важно, потому что, если
+система типов будет неаккуратна, она может случайно создать висячий указатель.
+Предположим, что у нас есть следующая программа:
 
 ```rust
 struct Inspector<'a>(&'a u8);
@@ -55,11 +56,10 @@ fn main() {
 }
 ```
 
-This program is totally sound and compiles today. The fact that `days` does
-not *strictly* outlive `inspector` doesn't matter. As long as the `inspector`
-is alive, so is days.
+Программа абсолютно правильна и компилируется. Тот факт, что `days` не живет
+*строго дольше* `inspector` не важен. Пока жив `inspector`, живы и days.
 
-However if we add a destructor, the program will no longer compile!
+Но если мы добавим деструктор, программа больше не будет компилироваться!
 
 ```rust,ignore
 struct Inspector<'a>(&'a u8);
@@ -74,8 +74,8 @@ fn main() {
     let (inspector, days);
     days = Box::new(1);
     inspector = Inspector(&days);
-    // Let's say `days` happens to get dropped first.
-    // Then when Inspector is dropped, it will try to read free'd memory!
+    // Предположим, что `days` удалилась первой.
+    // Когда Inspector будет удаляться, он попытается прочитать освобожденную память!
 }
 ```
 
@@ -88,44 +88,45 @@ fn main() {
 <anon>:10     let (inspector, days);
 <anon>:11     days = Box::new(1);
 <anon>:12     inspector = Inspector(&days);
-<anon>:13     // Let's say `days` happens to get dropped first.
-<anon>:14     // Then when Inspector is dropped, it will try to read free'd memory!
+<anon>:13     // Предположим, что `days` удалилась первой.
+<anon>:14     // Когда Inspector будет удаляться, он попытается прочитать освобожденную память!
           ...
 <anon>:10:27: 15:2 note: ...but borrowed value is only valid for the block suffix following statement 0 at 10:26
 <anon>:10     let (inspector, days);
 <anon>:11     days = Box::new(1);
 <anon>:12     inspector = Inspector(&days);
-<anon>:13     // Let's say `days` happens to get dropped first.
-<anon>:14     // Then when Inspector is dropped, it will try to read free'd memory!
+<anon>:13     // Предположим, что `days` удалилась первой.
+<anon>:14     // Когда Inspector будет удаляться, он попытается прочитать освобожденную память!
 <anon>:15 }
 ```
 
-Implementing Drop lets the Inspector execute some arbitrary code during its
-death. This means it can potentially observe that types that are supposed to
-live as long as it does actually were destroyed first.
+Добавление Drop позволяет Inspector выполнять произвольный код на смертном одре.
+Это означает, что он, теоретически, может заметить, что типы, которые должны
+были бы жить столько же, сколько и он, на самом деле уже уничтожены.
 
-Interestingly, only generic types need to worry about this. If they aren't
-generic, then the only lifetimes they can harbor are `'static`, which will truly
-live *forever*. This is why this problem is referred to as *sound generic drop*.
-Sound generic drop is enforced by the *drop checker*. As of this writing, some
-of the finer details of how the drop checker validates types is totally up in
-the air. However The Big Rule is the subtlety that we have focused on this whole
-section:
+Что интересно, только обобщённые типы должны об этом волноваться. Для не 
+обобщённых типов время жизни может быть только `'static`,
+а значит они могут жить *вечно*. Именно поэтому проблема называется проблемой 
+*правильного освобождения обобщённых типов*. Правильное освобождение обобщённых 
+типов гарантируется *анализатором освобождений*. Во время написания этой главы некоторые
+детали, связанные с тем, как анализатор освобождений проверяет типы, еще находились
+в подвешенном состоянии. Однако, Главным Правилом, на котором мы фокусируемся в
+этом разделе, будет следующее:
 
-**For a generic type to soundly implement drop, its generics arguments must
-strictly outlive it.**
+**Чтобы обобщённый тип правильно реализовывал сброс, его обобщённые аргументы 
+должно жить строго дольше него самого**
 
-Obeying this rule is (usually) necessary to satisfy the borrow
-checker; obeying it is sufficient but not necessary to be
-sound. That is, if your type obeys this rule then it's definitely
-sound to drop.
+Для того, чтобы подчиниться этому правилу, (обычно) необходимо удовлетворить
+требования анализатора заимствований; достаточно подчинятся этому правилу, хотя
+это и не обязательно. Таким образом, если ваш тип подчиняется этому правилу, то он
+точно правильно сбросится.
 
-The reason that it is not always necessary to satisfy the above rule
-is that some Drop implementations will not access borrowed data even
-though their type gives them the capability for such access.
+Причиной, по которой не всегда обязательно подчиняться правилу выше, является
+то, что некоторые реализации Drop не обладают доступом к заимствованным данным,
+даже при том, что их тип обладает возможностью доступа.
 
-For example, this variant of the above `Inspector` example will never
-accessed borrowed data:
+Например, у этого варианта `Inspector` никогда не будет доступа к заимствованным
+данным:
 
 ```rust,ignore
 struct Inspector<'a>(&'a u8, &'static str);
@@ -140,13 +141,14 @@ fn main() {
     let (inspector, days);
     days = Box::new(1);
     inspector = Inspector(&days, "gadget");
-    // Let's say `days` happens to get dropped first.
-    // Even when Inspector is dropped, its destructor will not access the
-    // borrowed `days`.
+    // Предположим, что `days` удалилась первой.
+    // Даже когда Inspector будет удаляться, у его деструктора не будет доступа
+    // к заимствованным `days`.
 }
 ```
 
-Likewise, this variant will also never access borrowed data:
+Также и у этого варианта `Inspector` никогда не будет доступа к заимствованным
+данным:
 
 ```rust,ignore
 use std::fmt;
@@ -163,44 +165,44 @@ fn main() {
     let (inspector, days): (Inspector<&u8>, Box<u8>);
     days = Box::new(1);
     inspector = Inspector(&days, "gadget");
-    // Let's say `days` happens to get dropped first.
-    // Even when Inspector is dropped, its destructor will not access the
-    // borrowed `days`.
+    // Предположим, что `days` удалилась первой.
+    // Даже когда Inspector будет удаляться, у его деструктора не будет доступа
+    // к заимствованным `days`.
 }
 ```
 
-However, *both* of the above variants are rejected by the borrow
-checker during the analysis of `fn main`, saying that `days` does not
-live long enough.
+Однако, *оба* этих варианта будут отвергнуты анализатором заимствований во время
+проверки `fn main`, говоря, что `days` не живет достаточно долго.
 
-The reason is that the borrow checking analysis of `main` does not
-know about the internals of each Inspector's Drop implementation.  As
-far as the borrow checker knows while it is analyzing `main`, the body
-of an inspector's destructor might access that borrowed data.
+Причиной является то, что проверка заимствований в `main` не знает о внутренностях
+каждой реализации Drop для Inspector. Насколько анализатор заимствований знает
+во время проверки `main`,  тело деструктора Inspector может иметь доступ к
+заимствованным данным.
 
-Therefore, the drop checker forces all borrowed data in a value to
-strictly outlive that value.
+Поэтому анализатор сброса заставляет, чтобы все заимствованные данные в
+значении типа жили строго дольше этого значения типа.
 
-# An Escape Hatch
+# Аварийный люк
 
-The precise rules that govern drop checking may be less restrictive in
-the future.
+Четкие правила, управляющие проверкой сброса, возможно, в будущем будут менее
+строгими.
 
-The current analysis is deliberately conservative and trivial; it forces all
-borrowed data in a value to outlive that value, which is certainly sound.
+Текущая проверка нарочита консервативна и тривиальна; она заставляет, чтобы все
+заимствованные данные в значении типа жили строго дольше этого значения типа,
+что несомненно правильно.
 
-Future versions of the language may make the analysis more precise, to
-reduce the number of cases where sound code is rejected as unsafe.
-This would help address cases such as the two Inspectors above that
-know not to inspect during destruction.
+Будущие версии языка, возможно, сделают проверки более точными, чтобы уменьшить
+количество случаев, когда правильный код отвергается как небезопасный. Это
+помогло бы решить случаи, как с двумя Inspector выше, которые знают, что не
+надо проверять их во время сброса.
 
-In the meantime, there is an unstable attribute that one can use to
-assert (unsafely) that a generic type's destructor is *guaranteed* to
-not access any expired data, even if its type gives it the capability
-to do so.
+В настоящее время существует нестабильный атрибут, который можно использовать,
+чтобы указать (небезопасно), что деструктор обобщенного типа *гарантированно* не
+будет иметь доступ к просроченным данным, даже при том, что у такого типа есть
+возможность сделать это.
 
-That attribute is called `unsafe_destructor_blind_to_params`.
-To deploy it on the Inspector example from above, we would write:
+Аттрибут называется `unsafe_destructor_blind_to_params`. Чтобы применить его к
+Inspector из примера выше, напишем:
 
 ```rust,ignore
 struct Inspector<'a>(&'a u8, &'static str);
@@ -208,40 +210,40 @@ struct Inspector<'a>(&'a u8, &'static str);
 impl<'a> Drop for Inspector<'a> {
     #[unsafe_destructor_blind_to_params]
     fn drop(&mut self) {
-        println!("Inspector(_, {}) knows when *not* to inspect.", self.1);
+        println!("Inspector(_, {})  знает, когда *не* стоит инспектировать.", self.1);
     }
 }
 ```
 
-This attribute has the word `unsafe` in it because the compiler is not
-checking the implicit assertion that no potentially expired data
-(e.g. `self.0` above) is accessed.
+Внутри аттрибута есть слово `unsafe`, потому что компилятор не проверяет, что
+осуществляется доступ к потенциально просроченным данным (например, здесь
+`self.0`).
 
-It is sometimes obvious that no such access can occur, like the case above.
-However, when dealing with a generic type parameter, such access can
-occur indirectly. Examples of such indirect access are:
+Иногда очевидно, что такой доступ не происходит, как в примере выше. Однако,
+когда мы имеем дело с параметром обобщенного типа, такой доступ может произойти
+не напрямую. Примерами такого непрямого доступа являются:
 
- * invoking a callback,
- * via a trait method call.
+ * выполнение обратного вызова,
+ * вызов метода типажа.
 
-(Future changes to the language, such as impl specialization, may add
-other avenues for such indirect access.)
+(Будущие изменения в языке, такие как специализация impl, могут добавить другие 
+возможности такого непрямого доступа.)
 
-Here is an example of invoking a callback:
+Вот пример с выполнением обратного вызова:
 
 ```rust,ignore
 struct Inspector<T>(T, &'static str, Box<for <'r> fn(&'r T) -> String>);
 
 impl<T> Drop for Inspector<T> {
     fn drop(&mut self) {
-        // The `self.2` call could access a borrow e.g. if `T` is `&'a _`.
+        // Вызов `self.2` может получить доступ к заимствованию, например, если `T` это `&'a _`.
         println!("Inspector({}, {}) unwittingly inspects expired data.",
                  (self.2)(&self.0), self.1);
     }
 }
 ```
 
-Here is an example of a trait method call:
+Вот пример с вызовом метода типажа:
 
 ```rust,ignore
 use std::fmt;
@@ -250,28 +252,25 @@ struct Inspector<T: fmt::Display>(T, &'static str);
 
 impl<T: fmt::Display> Drop for Inspector<T> {
     fn drop(&mut self) {
-        // There is a hidden call to `<T as Display>::fmt` below, which
-        // could access a borrow e.g. if `T` is `&'a _`
+        // Ниже есть невидимый вызов `<T as Display>::fmt`, который 
+        // может получить доступ к заимствованию, например, если `T` это `&'a _`
         println!("Inspector({}, {}) unwittingly inspects expired data.",
                  self.0, self.1);
     }
 }
 ```
 
-And of course, all of these accesses could be further hidden within
-some other method invoked by the destructor, rather than being written
-directly within it.
+И конечно, все эти получения доступа могут быть дополнительно скрыты внутри
+других методов, вызываемых деструктором, а не написанных непосредственно внутри
+него.
 
-In all of the above cases where the `&'a u8` is accessed in the
-destructor, adding the `#[unsafe_destructor_blind_to_params]`
-attribute makes the type vulnerable to misuse that the borrower
-checker will not catch, inviting havoc. It is better to avoid adding
-the attribute.
+Во всех случаях выше, где доступ к `&'a u8` получается в деструкторе благодаря
+добавлению аттрибута `#[unsafe_destructor_blind_to_params]`, становится возможным
+неправильно использовать тип, это не поймает анализатор заимствований, и
+возникнет хаос. Лучше избежать добавление этого аттрибута.
 
-# Is that all about drop checker?
+# Это все о проверке удалений?
 
-It turns out that when writing unsafe code, we generally don't need to
-worry at all about doing the right thing for the drop checker. However there
-is one special case that you need to worry about, which we will look at in
-the next section.
-
+Мы выяснили, что при написании небезопасного кода, нам обычно не надо
+волноваться о том, как правильно пройти проверки сброса. Но есть один особый
+случай, о котором надо волноваться. Мы рассмотрим его в следующем разделе.
