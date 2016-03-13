@@ -1,7 +1,7 @@
-% Опасности Основанного на Владении Управления Ресурсами (ОВУР)
+% Опасности управления ресурсами, основанного на владении
 
-ОВУР (англ. OBRM, Ownership Based Resource Management) (т.н. ПРЧИ: Получение
-Ресурса Через Инициализацию - англ.RAII: Resource Acquisition Is Initialization)
+Опасности управления ресурсами, основанного на владении (англ. OBRM, Ownership 
+Based Resource Management) - RAII: Resource Acquisition Is Initialization
 - это то, с чем вы будете много сталкиваться в Rust. Особенно если будете
 использовать стандартную библиотеку.
 
