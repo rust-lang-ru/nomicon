@@ -1,8 +1,8 @@
-% Checked Uninitialized Memory
+% Проверяемая неинициализированная память
 
-Like C, all stack variables in Rust are uninitialized until a value is
-explicitly assigned to them. Unlike C, Rust statically prevents you from ever
-reading them until you do:
+Как и в Си, в Rust все переменные на стеке не инициализированы до тех пор пока им
+явно не присвоено значение. В отличие от Си, Rust статически ограничивает их
+чтение, пока вы не сделаете это:
 
 ```rust,ignore
 fn main() {
@@ -17,11 +17,11 @@ src/main.rs:3     println!("{}", x);
                                  ^
 ```
 
-This is based off of a basic branch analysis: every branch must assign a value
-to `x` before it is first used. Interestingly, Rust doesn't require the variable
-to be mutable to perform a delayed initialization if every branch assigns
-exactly once. However the analysis does not take advantage of constant analysis
-or anything like that. So this compiles:
+Все основывается на базовом анализе веток: каждая ветка должна присвоить `x`
+значение до его первого использования. Интересно, что Rust не требует, чтобы
+переменная была изменяемой, чтобы выполнить отложенную инициализацию, если
+каждая ветка присваивает значение лишь однажды. Однако такой анализ не
+использует анализ констант или что-либо подобное. Поэтому это компилируется:
 
 ```rust
 fn main() {
@@ -37,7 +37,7 @@ fn main() {
 }
 ```
 
-but this doesn't:
+а это нет:
 
 ```rust,ignore
 fn main() {
@@ -54,7 +54,7 @@ src/main.rs:6:17: 6:18 error: use of possibly uninitialized variable: `x`
 src/main.rs:6   println!("{}", x);
 ```
 
-while this does:
+хотя это тоже компилируется:
 
 ```rust
 fn main() {
@@ -63,55 +63,56 @@ fn main() {
         x = 1;
         println!("{}", x);
     }
-    // Don't care that there are branches where it's not initialized
-    // since we don't use the value in those branches
+    // Не обращайте внимания на то, что есть еще ветки, в которых x не инициализирована
+    // ведь мы не используем в этих ветках ее значение 
 }
 ```
 
-Of course, while the analysis doesn't consider actual values, it does
-have a relatively sophisticated understanding of dependencies and control
-flow. For instance, this works:
+Конечно, несмотря на то, что в анализе не участвуют настоящие значения, 
+компилятор довольно хорошо понимает зависимости и поток выполнения. 
+Например, это работает:
 
 ```rust
 let x: i32;
 
 loop {
-    // Rust doesn't understand that this branch will be taken unconditionally,
-    // because it relies on actual values.
+    // Rust не понимает, что эта ветка безоговорочно выполнится,
+    // потому что это зависит от настоящих значений.
     if true {
-        // But it does understand that it will only be taken once because
-        // we unconditionally break out of it. Therefore `x` doesn't
-        // need to be marked as mutable.
+        // Но он понимает, что попадет сюда лишь один раз, потому что 
+        // мы однозначно выходим отсюда. Поэтому `x` не надо помечать
+        // изменяемым.
         x = 0;
         break;
     }
 }
-// It also knows that it's impossible to get here without reaching the break.
-// And therefore that `x` must be initialized here!
+// Он также понимает, что невозможно добраться сюда, не достигнув break.
+// И, следовательно, `x` должна быть уже инициализирована здесь!
 println!("{}", x);
 ```
 
-If a value is moved out of a variable, that variable becomes logically
-uninitialized if the type of the value isn't Copy. That is:
+Если переменная перестает владеть значением, эта переменная становится логически
+неинициализированной, если только тип значения не Copy. Это означает:
 
 ```rust
 fn main() {
     let x = 0;
     let y = Box::new(0);
-    let z1 = x; // x is still valid because i32 is Copy
-    let z2 = y; // y is now logically uninitialized because Box isn't Copy
+    let z1 = x; // x остается в силе из-за того, что i32 это Copy
+    let z2 = y; // y теперь логически не инициализирована, потому что Box не Copy
 }
 ```
 
-However reassigning `y` in this example *would* require `y` to be marked as
-mutable, as a Safe Rust program could observe that the value of `y` changed:
+Но переприсваивание `y` в этом примере *потребует*, чтобы `y` была помечена
+изменяемой, дабы программа на Безопасном Rust могла заметить, что значение `y`
+поменялось:
 
 ```rust
 fn main() {
     let mut y = Box::new(0);
-    let z = y; // y is now logically uninitialized because Box isn't Copy
-    y = Box::new(1); // reinitialize y
+    let z = y; // y теперь логически не инициализирована, потому что Box не Copy
+    y = Box::new(1); // переинициализация y
 }
 ```
 
-Otherwise it's like `y` is a brand new variable.
+Иначе `y` станет абсолютно новой переменной.

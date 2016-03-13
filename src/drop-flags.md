@@ -1,75 +1,76 @@
-% Drop Flags
+% Флаги удаления
 
-The examples in the previous section introduce an interesting problem for Rust.
-We have seen that it's possible to conditionally initialize, deinitialize, and
-reinitialize locations of memory totally safely. For Copy types, this isn't
-particularly notable since they're just a random pile of bits. However types
-with destructors are a different story: Rust needs to know whether to call a
-destructor whenever a variable is assigned to, or a variable goes out of scope.
-How can it do this with conditional initialization?
+Пример в предыдущем разделе показал интересную проблему для Rust. Мы увидели, что
+можно использовать условную инициализацию, деинициализацию и переинициализацию
+участков памяти абсолютно безопасно. Для типов Copy это не особо важно, потому
+что они являются просто случайной кучкой бит. Но для типов с деструкторами - это
+совсем другая история: Rust нужно знать, вызывать ли деструктор, когда переменная
+присваивается или выходит из области видимости. Откуда это можно узнать в случае
+условной инициализации?
 
-Note that this is not a problem that all assignments need worry about. In
-particular, assigning through a dereference unconditionally drops, and assigning
-in a `let` unconditionally doesn't drop:
+Заметьте, что не все присваивания должны волноваться об этой проблеме. В
+частности, присваивание через разыменование безусловно выполняет удаление, а
+присваивание в `let` безусловно не выполняет его:
 
 ```
-let mut x = Box::new(0); // let makes a fresh variable, so never need to drop
+let mut x = Box::new(0); // let создает новую переменную, поэтому удаление никогда не вызывается 
 let y = &mut x;
-*y = Box::new(1); // Deref assumes the referent is initialized, so always drops
+*y = Box::new(1); // Deref подразумевает, что референт инициализирован, поэтому удаление вызывается всегда
 ```
 
-This is only a problem when overwriting a previously initialized variable or
-one of its subfields.
+Это проблема возникает только при перезаписывании ранее инициализированных
+переменных или их под-полей.
 
-It turns out that Rust actually tracks whether a type should be dropped or not
-*at runtime*. As a variable becomes initialized and uninitialized, a *drop flag*
-for that variable is toggled. When a variable might need to be dropped, this
-flag is evaluated to determine if it should be dropped.
+Выясняется, что Rust на самом деле следит за тем, нужно ли *во время исполнения*
+удалять тип или нет. Когда переменная становится инициализированной или
+неинициализированной, *флаг удаления* для нее переключается. Когда необходимо удалить
+переменную, по этому флагу оценивается нужно ли вызывать у нее деструктор.
 
-Of course, it is often the case that a value's initialization state can be
-statically known at every point in the program. If this is the case, then the
-compiler can theoretically generate more efficient code! For instance, straight-
-line code has such *static drop semantics*:
+Конечно, часто можно статически определить в любом месте программы состояние
+инициализации у значения. В этом случае компилятор, теоретически, может создать
+более эффективный код! Например, прямолинейный код обладает такой *семантикой
+статических удалений*:
 
 ```rust
-let mut x = Box::new(0); // x was uninit; just overwrite.
-let mut y = x;           // y was uninit; just overwrite and make x uninit.
-x = Box::new(0);         // x was uninit; just overwrite.
-y = x;                   // y was init; Drop y, overwrite it, and make x uninit!
-                         // y goes out of scope; y was init; Drop y!
-                         // x goes out of scope; x was uninit; do nothing.
+let mut x = Box::new(0); // x была не инициализирована; просто перезаписать.
+let mut y = x;           // y была не инициализирована; просто перезаписать и сделать x неинициализированной.
+x = Box::new(0);         // x была не инициализирована; просто перезаписать.
+y = x;                   // y была инициализирована; Удалить y, перезаписать ее, и сделать x неинициализированной!
+                         // y выходит из области видимости; y была инициализирована; Удалить y!
+                         // x выходит из области видимости; x была не инициализирована; ничего не делать.
 ```
 
-Similarly, branched code where all branches have the same behavior with respect
-to initialization has static drop semantics:
+Код с условным ветвлением,  где внутри веток наблюдается похожее поведение 
+в отношении инициализации, обладает такой же семантикой статических удалений:
 
 ```rust
 # let condition = true;
-let mut x = Box::new(0);    // x was uninit; just overwrite.
+let mut x = Box::new(0);    // x была не инициализирована; просто перезаписать.
 if condition {
-    drop(x)                 // x gets moved out; make x uninit.
+    drop(x)                 // у x забирается владение ; сделать x неинициализированной.
 } else {
     println!("{}", x);
-    drop(x)                 // x gets moved out; make x uninit.
+    drop(x)                 // у x забирается владение ; сделать x неинициализированной.
 }
-x = Box::new(0);            // x was uninit; just overwrite.
-                            // x goes out of scope; x was init; Drop x!
+x = Box::new(0);            // x была не инициализирована; просто перезаписать.
+                            // x выходит из области видимости; x была инициализирована; Удалить x!
 ```
 
-However code like this *requires* runtime information to correctly Drop:
+Однако такому коду *требуется* информация из времени исполнения для правильного
+удаления:
 
 ```rust
 # let condition = true;
 let x;
 if condition {
-    x = Box::new(0);        // x was uninit; just overwrite.
+    x = Box::new(0);        // x была не инициализирована; просто перезаписать.
     println!("{}", x);
 }
-                            // x goes out of scope; x might be uninit;
-                            // check the flag!
+                            // x выходит из области видимости; x возможно была не инициализирована;
+                            // проверить флаг!
 ```
 
-Of course, in this case it's trivial to retrieve static drop semantics:
+Конечно, в данном случае легко можно получить семантику статических удалений:
 
 ```rust
 # let condition = true;
@@ -79,17 +80,18 @@ if condition {
 }
 ```
 
-As of Rust 1.0, the drop flags are actually not-so-secretly stashed in a hidden
-field of any type that implements Drop. Rust sets the drop flag by overwriting
-the entire value with a particular bit pattern. This is pretty obviously Not
-The Fastest and causes a bunch of trouble with optimizing code. It's legacy from
-a time when you could do much more complex conditional initialization.
+Что касается Rust 1.0, флаги удаления на самом деле не-так-уж-секретно спрятаны
+в невидимом поле любого типа, реализующего Drop. Rust устанавливает флаг,
+переписывая старое значение новым набором бит. Очевидно, что это Не Самый
+Быстрый способ, вызывающий набор проблем при оптимизации. Он пришел еще с того
+времени, когда вы могли выполнять гораздо более сложную условную инициализацию.
 
-As such work is currently under way to move the flags out onto the stack frame
-where they more reasonably belong. Unfortunately, this work will take some time
-as it requires fairly substantial changes to the compiler.
+Сейчас идет работа по переносу флагов в кадр стека, которому они по-настоящему 
+и принадлежат. К сожалению, эта работа потребует немало времени, потому что
+требуется внести довольно существенные изменения в компилятор.
 
-Regardless, Rust programs don't need to worry about uninitialized values on
-the stack for correctness. Although they might care for performance. Thankfully,
-Rust makes it easy to take control here! Uninitialized values are there, and
-you can work with them in Safe Rust, but you're never in danger.
+Независимо от этого, программы на Rust не должны волноваться о корректности
+неинициализированных значений в стеке. Хотя они могут волноваться о
+производительности. К счастью, Rust позволяет легко контролировать её!
+Неинициализированные значения существуют, и вы можете работать с ними в
+Безопасном Rust, никогда не попав в беду.

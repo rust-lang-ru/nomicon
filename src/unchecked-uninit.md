@@ -1,66 +1,67 @@
-% Unchecked Uninitialized Memory
+% Непроверяемая неинициализированная память
 
-One interesting exception to this rule is working with arrays. Safe Rust doesn't
-permit you to partially initialize an array. When you initialize an array, you
-can either set every value to the same thing with `let x = [val; N]`, or you can
-specify each member individually with `let x = [val1, val2, val3]`.
-Unfortunately this is pretty rigid, especially if you need to initialize your
-array in a more incremental or dynamic way.
+Особо интересным исключением из этого правила является работа с массивами.
+Безопасный Rust не разрешит вам частично инициализировать массив. При
+инициализации массива вы должны или установить всем одно и то же значение `let x
+= [val; N]`, или установить каждому члену отдельно `let x = [val1, val2,
+val3]`. К сожалению, это довольно негибко, особенно если вам нужно
+инициализировать массив более инкрементальным или динамичным способом.
 
-Unsafe Rust gives us a powerful tool to handle this problem:
-`mem::uninitialized`. This function pretends to return a value when really
-it does nothing at all. Using it, we can convince Rust that we have initialized
-a variable, allowing us to do trickier things with conditional and incremental
-initialization.
+Небезопасный Rust дает вам мощный инструмент для решения этой проблемы:
+`mem::uninitialized`. Эта функция делает вид, что возвращает значение, когда в
+действительности она вообще ничего не делает. Используя ее, мы можем убедить
+Rust в том, что переменная у нас инициализирована, и это позволяет делать хитрые
+вещи с условной или инкрементальной инициализацией.
 
-Unfortunately, this opens us up to all kinds of problems. Assignment has a
-different meaning to Rust based on whether it believes that a variable is
-initialized or not. If it's believed uninitialized, then Rust will semantically
-just memcopy the bits over the uninitialized ones, and do nothing else. However
-if Rust believes a value to be initialized, it will try to `Drop` the old value!
-Since we've tricked Rust into believing that the value is initialized, we can no
-longer safely use normal assignment.
+К сожалению, это может привести к возникновению кучи проблем. Присваивание имеет 
+разный смысл для Rust, если он считает, что переменная инициализирована и наоборот. Если
+считается, что переменная не инициализирована, то Rust просто семантически
+сделает memcopy новых бит на место неинициализированных и ничего больше. Однако,
+если Rust считает, что значение инициализировано, он попытается выполнить `Drop`
+старого значения! Из-за того, что мы обманули Rust в части того, что значение
+инициализировано, мы больше не можем безопасно использовать обычное присваивание.
 
-This is also a problem if you're working with a raw system allocator, which
-returns a pointer to uninitialized memory.
+Эта же проблема возникает с системным распределителем памяти, который возвращает 
+сырой указатель на неинициализированную память.
 
-To handle this, we must use the `ptr` module. In particular, it provides
-three functions that allow us to assign bytes to a location in memory without
-dropping the old value: `write`, `copy`, and `copy_nonoverlapping`.
+Для решения этого мы должны использовать модуль `ptr`. В частности, он
+предоставляет три функции, которые позволяют присваивать байты определенному
+месту в памяти, не удаляя старое значение: `write`, `copy` и
+`copy_nonoverlapping`.
 
-* `ptr::write(ptr, val)` takes a `val` and moves it into the address pointed
-  to by `ptr`.
-* `ptr::copy(src, dest, count)` copies the bits that `count` T's would occupy
-  from src to dest. (this is equivalent to memmove -- note that the argument
-  order is reversed!)
-* `ptr::copy_nonoverlapping(src, dest, count)` does what `copy` does, but a
-  little faster on the assumption that the two ranges of memory don't overlap.
-  (this is equivalent to memcpy -- note that the argument order is reversed!)
+* `ptr::write(ptr, val)` берет `val` и заносит его по адресу `ptr`.
+* `ptr::copy(src, dest, count)` копирует из src в dest столько памяти, сколько занимают `count` 
+  экземпляров типа T. (это эквивалент memmove - заметьте, что порядок аргументов 
+  перевернут!)
+* `ptr::copy_nonoverlapping(src, dest, count)` делает то же, что и `copy`, но 
+  немного быстрее, основываясь на предположении, что две области памяти не 
+  пересекаются. (это эквивалент memcpy -- заметьте, что порядок аргументов 
+  перевернут!)
 
-It should go without saying that these functions, if misused, will cause serious
-havoc or just straight up Undefined Behavior. The only things that these
-functions *themselves* require is that the locations you want to read and write
-are allocated. However the ways writing arbitrary bits to arbitrary
-locations of memory can break things are basically uncountable!
+Надеюсь не надо говорить, что эти функции в случае неправильного использования
+приведут к серьезному хаосу или прямиком к Неопределенному Поведению.
+*Единственным* требованием этих функций является то, что используемые области
+должны находится в памяти. Однако способов, которым запись произвольных бит в
+произвольное место в памяти может все сломать, нет числа!
 
-Putting this all together, we get the following:
+Объединяя все, получаем:
 
 ```rust
 use std::mem;
 use std::ptr;
 
-// size of the array is hard-coded but easy to change. This means we can't
-// use [a, b, c] syntax to initialize the array, though!
+// длина массива жестко закодирована, но это легко поменять. Это означает, что мы
+// не можем использовать синтаксис [a, b, c] для инициализации массива!
 const SIZE: usize = 10;
 
 let mut x: [Box<u32>; SIZE];
 
 unsafe {
-	// convince Rust that x is Totally Initialized
+	// убеждаем Rust, что x Абсолютно Инициализирована
 	x = mem::uninitialized();
 	for i in 0..SIZE {
-		// very carefully overwrite each index without reading it
-		// NOTE: exception safety is not a concern; Box can't panic
+		// очень аккуратно переписываем каждый индекс, не читая его
+		// Внимание: безопасность исключений не важна; Box не может вызвать панику
 		ptr::write(&mut x[i], Box::new(i as u32));
 	}
 }
@@ -68,18 +69,18 @@ unsafe {
 println!("{:?}", x);
 ```
 
-It's worth noting that you don't need to worry about `ptr::write`-style
-shenanigans with types which don't implement `Drop` or contain `Drop` types,
-because Rust knows not to try to drop them. Similarly you should be able to
-assign to fields of partially initialized structs directly if those fields don't
-contain any `Drop` types.
+Стоит отметить, что вам не нужно волноваться о махинациях в стиле `ptr::write` с
+типами, которые не реализуют `Drop` сами и не содержат типы, реализующие его, 
+потому что Rust знает, что для них не надо пытаться вызвать деструктор. Аналогично, 
+можно выполнять присваивания полям частично инициализированных структур напрямую, 
+если эти поля не содержат типы `Drop`.
 
-However when working with uninitialized memory you need to be ever-vigilant for
-Rust trying to drop values you make like this before they're fully initialized.
-Every control path through that variable's scope must initialize the value
-before it ends, if it has a destructor.
-*[This includes code panicking](unwinding.html)*.
+Однако, работая с неинициализированной памятью, вам надо постоянно следить,
+чтобы Rust не попытался вызвать деструктор значений, которые вы создали, до их
+полной инициализации. Каждый путь выполнения, содержащий область видимости этой
+переменной, должен инициализировать ее до своего конца, если у нее есть
+деструктор. *[Это включает в себя поведение кода в случае паники](unwinding.html)*.
 
-And that's about it for working with uninitialized memory! Basically nothing
-anywhere expects to be handed uninitialized memory, so if you're going to pass
-it around at all, be sure to be *really* careful.
+Вот и все по работе с неинициализированной памятью! Обычно неинициализированная
+память нигде не обрабатывается, поэтому, если вы собираетесь передавать ее по
+кругу всем, вам следует быть *очень* осторожным.
