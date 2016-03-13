@@ -1,9 +1,9 @@
-% PhantomData
+% Призрачные данные (PhantomData)
 
-When working with unsafe code, we can often end up in a situation where
-types or lifetimes are logically associated with a struct, but not actually
-part of a field. This most commonly occurs with lifetimes. For instance, the
-`Iter` for `&'a [T]` is (approximately) defined as follows:
+При работе с небезопасным кодом мы часто можем попасть в ситуацию, когда типы
+или времена жизни логически ассоциируются со структурой, но не являются на 
+самом деле частью конкретного поля. Особенно часто это происходит с временами 
+жизни. Например, `Iter` для  `&'a [T]` описывается (примерно) так:
 
 ```rust,ignore
 struct Iter<'a, T: 'a> {
@@ -12,20 +12,20 @@ struct Iter<'a, T: 'a> {
 }
 ```
 
-However because `'a` is unused within the struct's body, it's *unbounded*.
-Because of the troubles this has historically caused, unbounded lifetimes and
-types are *forbidden* in struct definitions. Therefore we must somehow refer
-to these types in the body. Correctly doing this is necessary to have
-correct variance and drop checking.
+Но, в связи с тем, что `'a` не используется внутри тела структуры, оно
+*безгранично*. Из-за проблем, которые исторически возникли, безграничные времена
+жизни и типы *запрещено* использовать в описании структур. Поэтому необходимо
+как-то перестроить эти типы внутри тела. Важно правильно написать это,
+чтобы иметь корректные проверки вариативности и удаления.
 
-We do this using `PhantomData`, which is a special marker type. `PhantomData`
-consumes no space, but simulates a field of the given type for the purpose of
-static analysis. This was deemed to be less error-prone than explicitly telling
-the type-system the kind of variance that you want, while also providing other
-useful such as the information needed by drop check.
+Используем `PhantomData`, который является специальным маркерным типом.
+`PhantomData` не занимает места в памяти, а симулирует поле необходимого типа
+для целей статического анализа. Считается, что так код менее подвержен ошибкам,
+чем при явном указании необходимой вариантности системе типов, а заодно
+предоставляется другая полезная информация, необходимая для проверки удаления.
 
-Iter logically contains a bunch of `&'a T`s, so this is exactly what we tell
-the PhantomData to simulate:
+Iter, логично считать, содержит кучу `&'a T`, поэтому именно ее мы и будем
+симулировать PhantomData:
 
 ```
 use std::marker;
@@ -37,51 +37,52 @@ struct Iter<'a, T: 'a> {
 }
 ```
 
-and that's it. The lifetime will be bounded, and your iterator will be variant
-over `'a` and `T`. Everything Just Works.
+и все. Время жизни будет ограничено, и ваш итератор будет вариантен над `'a` и
+`T`. Все Просто Работает.
 
-Another important example is Vec, which is (approximately) defined as follows:
+Еще одним важным примером является Vec, который описывается (примерно) так:
 
 ```
 struct Vec<T> {
-    data: *const T, // *const for variance!
+    data: *const T, // *const для вариантности!
     len: usize,
     cap: usize,
 }
 ```
 
-Unlike the previous example it *appears* that everything is exactly as we
-want. Every generic argument to Vec shows up in the at least one field.
-Good to go!
+В отличие от предыдущего примера *кажется*, что все именно так, как мы хотим.
+Один обобщенный аргумент в Vec проявляется по крайней мере в одном поле. Идем
+дальше!
 
-Nope.
+Не-а.
 
-The drop checker will generously determine that Vec<T> does not own any values
-of type T. This will in turn make it conclude that it doesn't need to worry
-about Vec dropping any T's in its destructor for determining drop check
-soundness. This will in turn allow people to create unsoundness using
-Vec's destructor.
+Анализатор удалений великодушно определит, что Vec<T> не владеет ни одним
+значением типа T. Это в свою очередь заставит его сделать вывод, что ему не надо
+волноваться при выполнении проверки правильности удаления любых T в
+деструкторе Vec. Что в свою очередь позволит людям создавать дыры в системе 
+типов с помощью деструктора Vec.
 
-In order to tell dropck that we *do* own values of type T, and therefore may
-drop some T's when *we* drop, we must add an extra PhantomData saying exactly
-that:
+Для того, чтобы рассказать анализатору удалений, что мы *на самом деле* владеем
+значениями типа T, и, следовательно, можем удалять некоторые T во время удаления
+*всего Vec*, мы должны добавить дополнительное PhantomData, явно утверждая:
 
 ```
 use std::marker;
 
 struct Vec<T> {
-    data: *const T, // *const for covariance!
+    data: *const T, // *const для ковариантности!
     len: usize,
     cap: usize,
     _marker: marker::PhantomData<T>,
 }
 ```
 
-Raw pointers that own an allocation is such a pervasive pattern that the
-standard library made a utility for itself called `Unique<T>` which:
+Сырые указатели, владеющие пространством в памяти - это настолько повсеместная
+картина, что в стандартной библиотеке создали утилиту для этого, называемую
+`Unique<T>`, которая:
 
-* wraps a `*const T` for variance
-* includes a `PhantomData<T>`,
-* auto-derives Send/Sync as if T was contained
-* marks the pointer as NonZero for the null-pointer optimization
+* оборачивает `*const T` для вариантности
+* включает в себя `PhantomData<T>`,
+* автоматически выводит Send/Sync, как будто T включал их
+* помечает указатель NonZero для оптимизации нулевого указателя
 

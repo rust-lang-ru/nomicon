@@ -1,6 +1,7 @@
-% The Dot Operator
+% Оператор Точка
 
-The dot operator will perform a lot of magic to convert types. It will perform
-auto-referencing, auto-dereferencing, and coercion until types match.
+Оператор точка выполняет много волшебных действий для преобразований типов. Он
+выполняет автоматическое создание ссылок, автоматическое разыменование ссылок и
+приведение пока типы не совпадут.
 
-TODO: steal information from http://stackoverflow.com/questions/28519997/what-are-rusts-exact-auto-dereferencing-rules/28552082#28552082
+TODO: своровать информацию из http://stackoverflow.com/questions/28519997/what-are-rusts-exact-auto-dereferencing-rules/28552082#28552082

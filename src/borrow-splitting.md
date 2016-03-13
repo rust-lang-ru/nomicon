@@ -1,10 +1,10 @@
-% Splitting Borrows
+% Деление заимствований
 
-The mutual exclusion property of mutable references can be very limiting when
-working with a composite structure. The borrow checker understands some basic
-stuff, but will fall over pretty easily. It does understand structs
-sufficiently to know that it's possible to borrow disjoint fields of a struct
-simultaneously. So this works today:
+Свойство эксклюзивного изменения у изменяемых ссылок может сильно ограничивать
+работу с составными структурами. Анализатор заимствований понимает какие-то
+базовые вещи, но может поломаться довольно просто. Он достаточно понимает
+структуры, чтобы знать, что можно одновременно заимствовать непересекающиеся
+поля структуры. Вот так работать будет:
 
 ```rust
 struct Foo {
@@ -23,8 +23,8 @@ let c2 = &x.c;
 println!("{} {} {} {}", a, b, c, c2);
 ```
 
-However borrowck doesn't understand arrays or slices in any way, so this doesn't
-work:
+Однако анализатор заимствований вообще не понимает массивы или срезы, поэтому
+так работать не будет:
 
 ```rust,ignore
 let mut x = [1, 2, 3];
@@ -51,17 +51,18 @@ println!("{} {}", a, b);
 error: aborting due to 2 previous errors
 ```
 
-While it was plausible that borrowck could understand this simple case, it's
-pretty clearly hopeless for borrowck to understand disjointness in general
-container types like a tree, especially if distinct keys actually *do* map
-to the same value.
+Хоть и кажется, что анализатор заимствований мог бы понимать этот простой
+случай, очевидно, безнадежным кажется, что он мог бы понимать различия в
+общих типах контейнеров, таких как деревья, особенно, если разные ключи
+*скрывают* одно и то же значения.
 
-In order to "teach" borrowck that what we're doing is ok, we need to drop down
-to unsafe code. For instance, mutable slices expose a `split_at_mut` function
-that consumes the slice and returns two mutable slices. One for everything to
-the left of the index, and one for everything to the right. Intuitively we know
-this is safe because the slices don't overlap, and therefore alias. However
-the implementation requires some unsafety:
+Для того чтобы "объяснить" анализатору заимствований, что мы делаем правильно,
+нам нужно перейти к небезопасному коду. Например, изменяемые срезы подвергаются
+действию функции `split_at_mut`, которая берет срез и возвращает два изменяемых
+среза. В один попадает то, что находится слева от индекса, в другой - справа.
+Интуитивно мы понимаем, что это безопасно, потому что срезы не пересекаются и,
+следовательно, не совпадают ссылки на них. Однако для реализации потребуется
+щепотка небезопасного кода:
 
 ```rust,ignore
 fn split_at_mut(&mut self, mid: usize) -> (&mut [T], &mut [T]) {
@@ -75,11 +76,11 @@ fn split_at_mut(&mut self, mid: usize) -> (&mut [T], &mut [T]) {
 }
 ```
 
-This is actually a bit subtle. So as to avoid ever making two `&mut`'s to the
-same value, we explicitly construct brand-new slices through raw pointers.
+Все здесь тонко. Поэтому, чтобы избежать создания двух `&mut` к одному
+значению, мы явно конструируем два абсолютно новых среза через сырые указатели.
 
-However more subtle is how iterators that yield mutable references work.
-The iterator trait is defined as follows:
+Еще сложнее работают итераторы, перебирающие изменяемые ссылки. Типаж итератора
+описывается так:
 
 ```rust
 trait Iterator {
@@ -89,25 +90,26 @@ trait Iterator {
 }
 ```
 
-Given this definition, Self::Item has *no* connection to `self`. This means that
-we can call `next` several times in a row, and hold onto all the results
-*concurrently*. This is perfectly fine for by-value iterators, which have
-exactly these semantics. It's also actually fine for shared references, as they
-admit arbitrarily many references to the same thing (although the iterator needs
-to be a separate object from the thing being shared).
+Глядя на определение, видим, что у Self::Item *нет* связи с `self`. Это
+означает, что мы можем вызвать `next` несколько раз подряд, и получим все
+результаты *одновременно*. Для итераторов по-значению, у которых именно такая
+семантика, все по-другому. Для общих ссылок все нормально, потому что они
+допускают сколь угодно много ссылок на одно и то же (хотя итератор и общий
+объект должны быть разными объектами).
 
-But mutable references make this a mess. At first glance, they might seem
-completely incompatible with this API, as it would produce multiple mutable
-references to the same object!
+Но с изменяемыми ссылками все превращается в кашу. На первый взгляд кажется,
+что они полностью несовместимы с этим API, из-за того, что создадут много
+изменяемых ссылок на один и тот же объект!
 
-However it actually *does* work, exactly because iterators are one-shot objects.
-Everything an IterMut yields will be yielded at most once, so we don't
-actually ever yield multiple mutable references to the same piece of data.
+Однако, *на самом деле* все работает, именно, потому что итераторы - это
+одноразовые объекты. Все, по чему пройдется IterMut, будет пройдено только один
+раз, поэтому на самом деле мы никогда не создадим много изменяемых ссылок на
+один кусок данных.
 
-Perhaps surprisingly, mutable iterators don't require unsafe code to be
-implemented for many types!
+Возможно, это удивительно, но изменяемым итератором не нужно использовать
+небезопасный код для реализации разных типов!
 
-For instance here's a singly linked list:
+Например, вот пример однонаправленного списка:
 
 ```rust
 # fn main() {}
@@ -142,7 +144,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 }
 ```
 
-Here's a mutable slice:
+Вот изменяемый срез:
 
 ```rust
 # fn main() {}
@@ -176,7 +178,7 @@ impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
 }
 ```
 
-And here's a binary tree:
+Двоичное дерево:
 
 ```rust
 # fn main() {}
@@ -284,8 +286,8 @@ impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
 }
 ```
 
-All of these are completely safe and work on stable Rust! This ultimately
-falls out of the simple struct case we saw before: Rust understands that you
-can safely split a mutable reference into subfields. We can then encode
-permanently consuming a reference via Options (or in the case of slices,
-replacing with an empty slice).
+Все это абсолютно безопасно и работает на стабильном Rust! На самом деле, это
+вытекает из случая с простой структурой, который мы видели выше: Rust понимает,
+что вы можете делить изменяемую ссылку на ссылки на под-поля. Мы можем
+возвращать постоянно употребляемую ссылку по средствам Options (или в случае
+срезов, заменить на пустой срез).

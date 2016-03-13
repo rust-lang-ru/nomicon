@@ -1,53 +1,55 @@
-% Coercions
+% Приведение типов
 
-Types can implicitly be coerced to change in certain contexts. These changes are
-generally just *weakening* of types, largely focused around pointers and
-lifetimes. They mostly exist to make Rust "just work" in more cases, and are
-largely harmless.
+Типы могут неявно приводиться к другим типам в определенных контекстах. Эти
+изменения в основном - просто *ослабление* типов, сильно сфокусированное на
+указателях и временах жизни. Их главная задача - заставить Rust "просто работать"
+в большинстве случаев, они в основном безвредны.
 
-Here's all the kinds of coercion:
+Вот все типы приведения:
 
-Coercion is allowed between the following types:
+Приведение разрешено между следующими типами:
 
-* Transitivity: `T_1` to `T_3` where `T_1` coerces to `T_2` and `T_2` coerces to
-  `T_3`
-* Pointer Weakening:
-    * `&mut T` to `&T`
-    * `*mut T` to `*const T`
-    * `&T` to `*const T`
-    * `&mut T` to `*mut T`
-* Unsizing: `T` to `U` if `T` implements `CoerceUnsized<U>`
+* Транзитивность: `T_1` к `T_3` где `T_1` приводится к `T_2` и `T_2` приводится 
+к `T_3`
+* Ослабление Указателей:
+    * `&mut T` к `&T`
+    * `*mut T` к `*const T`
+    * `&T` к `*const T`
+    * `&mut T` к `*mut T`
+* Приведение к безразмерному типу (ТДР): `T` к `U` если `T` реализует 
+`CoerceUnsized<U>`
 
-`CoerceUnsized<Pointer<U>> for Pointer<T> where T: Unsize<U>` is implemented
-for all pointer types (including smart pointers like Box and Rc). Unsize is
-only implemented automatically, and enables the following transformations:
+`CoerceUnsized<Pointer<U>> for Pointer<T> where T: Unsize<U>` реализовано для 
+всех типов указателей (включая умные указатели, как Box и Rc). Приведение к 
+безразмерному типу реализуется только автоматически и разрешает следующие 
+трансформации:
 
 * `[T; n]` => `[T]`
-* `T` => `Trait` where `T: Trait`
-* `Foo<..., T, ...>` => `Foo<..., U, ...>` where:
+* `T` => `Trait` где `T: Trait`
+* `Foo<..., T, ...>` => `Foo<..., U, ...>` где:
     * `T: Unsize<U>`
-    * `Foo` is a struct
-    * Only the last field of `Foo` has type `T`
-    * `T` is not part of the type of any other fields
+    * `Foo` - это структура
+    * Только у последнего поля `Foo` тип `T`
+    * `T` не является частью типа любых других полей
 
-Coercions occur at a *coercion site*. Any location that is explicitly typed
-will cause a coercion to its type. If inference is necessary, the coercion will
-not be performed. Exhaustively, the coercion sites for an expression `e` to
-type `U` are:
+Приведение происходит в *месте приведения*. Любая явно типизированная область
+памяти выполняет приведение к ее типу. Если нужен вывод типов, приведение
+производится не будет. Все места, где производится приведение `e` к типу `U`,
+это:
 
-* let statements, statics, and consts: `let x: U = e`
-* Arguments to functions: `takes_a_U(e)`
-* Any expression that will be returned: `fn foo() -> U { e }`
-* Struct literals: `Foo { some_u: e }`
-* Array literals: `let x: [U; 10] = [e, ..]`
-* Tuple literals: `let x: (U, ..) = (e, ..)`
-* The last expression in a block: `let x: U = { ..; e }`
+* Утверждения let, статические переменные и константы: `let x: U = e`
+* Аргументы функций: `takes_a_U(e)`
+* Любое возвращаемое выражение: `fn foo() -> U { e }`
+* Литералы структур: `Foo { some_u: e }`
+* Литералы массивов: `let x: [U; 10] = [e, ..]`
+* Литералы кортежей: `let x: (U, ..) = (e, ..)`
+* Последние выражение в блоке: `let x: U = { ..; e }`
 
-Note that we do not perform coercions when matching traits (except for
-receivers, see below). If there is an impl for some type `U` and `T` coerces to
-`U`, that does not constitute an implementation for `T`. For example, the
-following will not type check, even though it is OK to coerce `t` to `&T` and
-there is an impl for `&T`:
+Заметьте, что мы не выполняем приведение при совпадении типажей (кроме 
+получаетелей, смотри ниже). Если есть impl для типа `U`, а `T` приводится 
+к `U`, это не означает, что эта реализация подойдет для `T`. Например, 
+следующее не пройдет проверку типов, даже при том, что приводить `t` к `&T` 
+можно и есть impl для `&T`:
 
 ```rust,ignore
 trait Trait {}
