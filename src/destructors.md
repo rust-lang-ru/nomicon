@@ -1,29 +1,27 @@
-% Destructors
+% Деструкторы
 
-What the language *does* provide is full-blown automatic destructors through the
-`Drop` trait, which provides the following method:
+Что язык *действительно* дает, так это полноценные автоматические деструкторы в
+виде типажа `Drop`, который предоставляет следующий метод:
 
 ```rust,ignore
 fn drop(&mut self);
 ```
 
-This method gives the type time to somehow finish what it was doing.
+Этот метод дает типу время каким-то образом завершить то, что он делал.
 
-**After `drop` is run, Rust will recursively try to drop all of the fields
-of `self`.**
+**После запуска `drop`, Rust рекурсивно попытается удалить все поля `self`.**
 
-This is a convenience feature so that you don't have to write "destructor
-boilerplate" to drop children. If a struct has no special logic for being
-dropped other than dropping its children, then it means `Drop` doesn't need to
-be implemented at all!
+Это удобная возможность, позволяющая не писать *рутинный деструктор* для
+удаления всех детей. Если у структуры нет никакой дополнительной логики при
+удалении кроме удаления всех своих детей, то `Drop` не надо реализовывать вовсе!
 
-**There is no stable way to prevent this behavior in Rust 1.0.**
+**Нельзя запретить это поведение в Rust 1.0.**
 
-Note that taking `&mut self` means that even if you could suppress recursive
-Drop, Rust will prevent you from e.g. moving fields out of self. For most types,
-this is totally fine.
+Заметьте, обладание `&mut self` означает, что даже если вы сможете отменить
+рекурсивный вызов деструктора, Rust запретит вам, например, передавать владение
+полями из self. Для большинства типов это абсолютно нормально.
 
-For instance, a custom implementation of `Box` might write `Drop` like this:
+Например, в собственной реализации `Box` можно написать `Drop` так:
 
 ```rust
 #![feature(alloc, heap_api, drop_in_place, unique)]
@@ -50,11 +48,12 @@ impl<T> Drop for Box<T> {
 # fn main() {}
 ```
 
-and this works fine because when Rust goes to drop the `ptr` field it just sees
-a [Unique] that has no actual `Drop` implementation. Similarly nothing can
-use-after-free the `ptr` because when drop exits, it becomes inaccessible.
+и это нормально работает, потому что, когда Rust собирается удалить поле `ptr`,
+он видит [Unique], у которого нет реализации `Drop` в данном примере.
+Аналогично, ничто не сможет использовать-после-освобождения `ptr`, потому что
+когда закончится выполнение деструктора, это поле станет недостижимым.
 
-However this wouldn't work:
+Однако это работать не будет:
 
 ```rust
 #![feature(alloc, heap_api, drop_in_place, unique)]
@@ -84,8 +83,8 @@ struct SuperBox<T> { my_box: Box<T> }
 impl<T> Drop for SuperBox<T> {
     fn drop(&mut self) {
         unsafe {
-            // Hyper-optimized: deallocate the box's contents for it
-            // without `drop`ing the contents
+            // Гипер-оптимизация: освобождаем содержимое box вместо него,
+            // не вызывая `drop` у его содержимого
             heap::deallocate((*self.my_box.ptr) as *mut u8,
                              mem::size_of::<T>(),
                              mem::align_of::<T>());
@@ -95,12 +94,13 @@ impl<T> Drop for SuperBox<T> {
 # fn main() {}
 ```
 
-After we deallocate the `box`'s ptr in SuperBox's destructor, Rust will
-happily proceed to tell the box to Drop itself and everything will blow up with
-use-after-frees and double-frees.
+После освобождения ptr из `box` в деструкторе SuperBox, Rust с радостью
+приступит к вызову деструктора у самого box, и все сломается из-за
+использования-после-освобождения и двойного-освобождения.
 
-Note that the recursive drop behavior applies to all structs and enums
-regardless of whether they implement Drop. Therefore something like
+Заметьте, что поведение рекурсивного вызова деструктора применяется ко всем
+структурам и перечислениям, независимо от того, реализуют они Drop или нет.
+Поэтому что-то вроде
 
 ```rust
 struct Boxy<T> {
@@ -110,11 +110,11 @@ struct Boxy<T> {
 }
 ```
 
-will have its data1 and data2's fields destructors whenever it "would" be
-dropped, even though it itself doesn't implement Drop. We say that such a type
-*needs Drop*, even though it is not itself Drop.
+будет вызывать деструкторы полей data1 и data2 всякий раз, когда они "должны"
+быть удалены, даже при том, что они сами не реализуют Drop. Мы говорим, что
+такому типу *нужен Drop*, хотя он сам не Drop.
 
-Similarly,
+Аналогично,
 
 ```rust
 enum Link {
@@ -123,16 +123,17 @@ enum Link {
 }
 ```
 
-will have its inner Box field dropped if and only if an instance stores the
-Next variant.
+удалит внутреннее поле Box тогда и только тогда, когда экземпляр будет содержать
+вариант Next.
 
-In general this works really nicely because you don't need to worry about
-adding/removing drops when you refactor your data layout. Still there's
-certainly many valid usecases for needing to do trickier things with
-destructors.
+В большинстве случаев это отлично работает, потому что вам не нужно волноваться
+о добавлении/удалении деструкторов во время рефакторинга ваших данных. Тем не
+менее, есть, конечно, еще много случаев, в которых действительно нужно делать
+вещи посложнее с деструкторами.
 
-The classic safe solution to overriding recursive drop and allowing moving out
-of Self during `drop` is to use an Option:
+Классическим безопасным решением для того, чтобы отменить рекурсивный вызов
+деструктора и позволить передать владение из Self во время `drop`, является
+использование Option:
 
 ```rust
 #![feature(alloc, heap_api, drop_in_place, unique)]
@@ -162,9 +163,9 @@ struct SuperBox<T> { my_box: Option<Box<T>> }
 impl<T> Drop for SuperBox<T> {
     fn drop(&mut self) {
         unsafe {
-            // Hyper-optimized: deallocate the box's contents for it
-            // without `drop`ing the contents. Need to set the `box`
-            // field as `None` to prevent Rust from trying to Drop it.
+            // Гипер-оптимизация: освобождаем содержимое box вместо него,
+            // не вызывая `drop` у содержимого. Необходимо установить поля `box`
+            // как `None` для того, чтобы Rust не пытался вызвать Drop у них.
             let my_box = self.my_box.take().unwrap();
             heap::deallocate((*my_box.ptr) as *mut u8,
                              mem::size_of::<T>(),
@@ -176,15 +177,15 @@ impl<T> Drop for SuperBox<T> {
 # fn main() {}
 ```
 
-However this has fairly odd semantics: you're saying that a field that *should*
-always be Some *may* be None, just because that happens in the destructor. Of
-course this conversely makes a lot of sense: you can call arbitrary methods on
-self during the destructor, and this should prevent you from ever doing so after
-deinitializing the field. Not that it will prevent you from producing any other
-arbitrarily invalid state in there.
+Однако здесь довольно странная семантика: вы говорите, что поле, которое всегда
+*должно* быть Some, *может* быть None, только потому что это произошло в
+деструкторе. Конечно, в этом, наоборот, большой смысл: вы можете вызывать
+произвольные методы у self во время вызова деструктора, и это должно позволить
+вам не делать такое когда-либо после деинициализации поля. Не то, чтобы это не
+позволило вам создавать любые другие произвольные недопустимые состояния.
 
-On balance this is an ok choice. Certainly what you should reach for by default.
-However, in the future we expect there to be a first-class way to announce that
-a field shouldn't be automatically dropped.
+В конечном счете это нормальный выбор. Безусловно, вы сможете достигнуть отмены
+вызова деструктора так. Однако в будущем мы надеемся, что найдется первоклассный
+способ сообщить, что у поля не должен автоматически вызываться деструктор.
 
 [Unique]: phantom-data.html
