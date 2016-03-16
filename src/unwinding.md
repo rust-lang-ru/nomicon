@@ -1,49 +1,50 @@
-% Unwinding
+% Размотка
 
-Rust has a *tiered* error-handling scheme:
+У Rust *многоуровневая* схема перехвата ошибок:
 
-* If something might reasonably be absent, Option is used.
-* If something goes wrong and can reasonably be handled, Result is used.
-* If something goes wrong and cannot reasonably be handled, the thread panics.
-* If something catastrophic happens, the program aborts.
+* Если чего-то разумно не может быть, используется Option.
+* Если что-то идет не так и может быть разумно перехвачено, используется Result.
+* Если что-то идет не так и не может быть разумно перехвачено, поток паникует.
+* Если что-то катастрофическое случается, программа закрывается с ошибкой.
 
-Option and Result are overwhelmingly preferred in most situations, especially
-since they can be promoted into a panic or abort at the API user's discretion.
-Panics cause the thread to halt normal execution and unwind its stack, calling
-destructors as if every function instantly returned.
+Option и Result предпочитаемы в подавляющем большинстве ситуаций, особенно из-за
+того, что они могут быть преобразованы в панику или прерывание с ошибкой по
+усмотрению пользовательского API. Паника заставляет поток прервать нормальное
+выполнение и размотать свой стек, вызывая деструкторы так, как-будто каждая
+функция в стеке нормально завершилась.
 
-As of 1.0, Rust is of two minds when it comes to panics. In the long-long-ago,
-Rust was much more like Erlang. Like Erlang, Rust had lightweight tasks,
-and tasks were intended to kill themselves with a panic when they reached an
-untenable state. Unlike an exception in Java or C++, a panic could not be
-caught at any time. Panics could only be caught by the owner of the task, at which
-point they had to be handled or *that* task would itself panic.
+По состоянию на 1.0, у Rust есть два мнения, когда дело доходит до паники.
+Давным давно Rust был очень похож на Erlang. Как и у Erlang, у Rust были
+легковесные потоки, и они должны были убивать себя с паникой, когда переходили
+в неприемлемое состояние. В отличие от исключений в Java или C++, панику нельзя
+было поймать в любое время. Ее мог поймать только владелец потока в
+определенном месте перехвата или *и этот* поток начинал паниковать.
 
-Unwinding was important to this story because if a task's
-destructors weren't called, it would cause memory and other system resources to
-leak. Since tasks were expected to die during normal execution, this would make
-Rust very poor for long-running systems!
+Размотка была очень важна в этом рассказе, потому что не вызов деструкторов
+позволял утекать памяти и другим ресурсам системы. Из-за того, что ожидалось,
+что потоки будут умирать во время нормального выполнения, Rust становился очень
+слабым при работе с долго-живущими системами!
 
-As the Rust we know today came to be, this style of programming grew out of
-fashion in the push for less-and-less abstraction. Light-weight tasks were
-killed in the name of heavy-weight OS threads. Still, on stable Rust as of 1.0
-panics can only be caught by the parent thread. This means catching a panic
-requires spinning up an entire OS thread! This unfortunately stands in conflict
-to Rust's philosophy of zero-cost abstractions.
+Rust, каким мы его знаем сейчас, вырос из стиля программирования в виде создания
+все меньших-и-меньших абстракций. Легковесные потоки были убиты и заменены на
+тяжеловесные потоки ОС. Однако, на стабильном Rust 1.0 паники могут
+перехватываться только родительским потоком. Это означает, что поимка паники
+требует размотки целого потока ОС! Это, к сожалению, идет в разрез с философией
+Rust - использование абстракций нулевой стоимости.
 
-There is an unstable API called `catch_panic` that enables catching a panic
-without spawning a thread. Still, we would encourage you to only do this
-sparingly. In particular, Rust's current unwinding implementation is heavily
-optimized for the "doesn't unwind" case. If a program doesn't unwind, there
-should be no runtime cost for the program being *ready* to unwind. As a
-consequence, actually unwinding will be more expensive than in e.g. Java.
-Don't build your programs to unwind under normal circumstances. Ideally, you
-should only panic for programming errors or *extreme* problems.
+Существует нестабильное API, называемое `catch_panic`, которое позволяет ловить
+панику, не порождая поток. По-прежнему, мы просим вас пользоваться им умеренно.
+В частности, текущая реализация размотки в Rust сильно оптимизирована под
+"невыполняющие размотку" случаи. Если программа не выполняет размотку, цена
+*ожидания* размотки является нулевой во время исполнения. Как следствие, текущая
+версия размотки является более дорогостоящей, чем, например, в Java. Не стройте
+программы, использующие размотку в обычных ситуациях. В идеале вы должны
+вызывать панику только в случае программных ошибок или *огромных* проблем.
 
-Rust's unwinding strategy is not specified to be fundamentally compatible
-with any other language's unwinding. As such, unwinding into Rust from another
-language, or unwinding into another language from Rust is Undefined Behavior.
-You must *absolutely* catch any panics at the FFI boundary! What you do at that
-point is up to you, but *something* must be done. If you fail to do this,
-at best, your application will crash and burn. At worst, your application *won't*
-crash and burn, and will proceed with completely clobbered state.
+Стратегия размотки в Rust не заточена под полную совместимость с размоткой в
+других языках. Поэтому размотка в Rust из других языков или наоборот является
+Неопределенным Поведением. Вы должны ловить *абсолютно* все паники на границе
+FFI! Что конкретно вы будете делать, зависит от вас, но *что-то* делать надо
+обязательно. Если вы ошибетесь с этим, лучшее, что произойдет, ваше приложение
+сломается и сгорит. Худшее - оно *не* сломается и *не* сгорит, а продолжит
+работать в полностью расколошмаченном состоянии.
