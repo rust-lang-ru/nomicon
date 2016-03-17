@@ -1,13 +1,15 @@
-% Concurrency and Parallelism
+% Многопоточность и параллелизм
 
-Rust as a language doesn't *really* have an opinion on how to do concurrency or
-parallelism. The standard library exposes OS threads and blocking sys-calls
-because everyone has those, and they're uniform enough that you can provide
-an abstraction over them in a relatively uncontroversial way. Message passing,
-green threads, and async APIs are all diverse enough that any abstraction over
-them tends to involve trade-offs that we weren't willing to commit to for 1.0.
+У Rust, как у языка, *на самом деле* нет мнения о том, как быть с многопоточностью
+или параллелизмом. Стандартная библиотека предлагает потоки ОС и блокирующие
+системные вызовы, потому что они есть у всех, и они достаточно универсальны для
+построения абстракций над ними относительно однозначным способом. Передача
+сообщений, зеленые потоки и асинхронные API достаточно разнообразны, чтобы
+построение любой абстракции над ними как правило заставляло бы искать
+компромисс, на который мы не хотели идти в версии 1.0.
 
-However the way Rust models concurrency makes it relatively easy to design your own
-concurrency paradigm as a library and have everyone else's code Just Work
-with yours. Just require the right lifetimes and Send and Sync where appropriate
-and you're off to the races. Or rather, off to the... not... having... races.
+Однако то, как Rust моделирует параллелизм, позволяет вам относительно просто
+разработать собственную парадигму параллелизма похожую на библиотечную и
+заставит любой другой код Просто Работать с вашим. Только необходимо проставить
+правильные времена жизни и Send и Sync, в соответствующих случаях, и вы готовы
+начать гонку. Или наоборот... не... начинать... гонки.
