@@ -1,20 +1,21 @@
-% Example: Implementing Vec
+% Пример: Реализация Vec
 
-To bring everything together, we're going to write `std::Vec` from scratch.
-Because all the best tools for writing unsafe code are unstable, this
-project will only work on nightly (as of Rust 1.2.0). With the exception of the
-allocator API, much of the unstable code we'll use is expected to be stabilized
-in a similar form as it is today.
+Объединив все вместе, напишем `std::Vec` с самого начала. Данный проект будет
+работать только на ночной сборке (по крайней мере для Rust 1.2.0), из-за того
+что все самые лучшие инструменты для написания небезопасного кода нестабильны.
+Большинство используемого нестабильного кода будет тем или иным образом
+стабилизировано со временем, за исключением API аллокатора.
 
-However we will generally try to avoid unstable code where possible. In
-particular we won't use any intrinsics that could make a code a little
-bit nicer or efficient because intrinsics are permanently unstable. Although
-many intrinsics *do* become stabilized elsewhere (`std::ptr` and `str::mem`
-consist of many intrinsics).
+Однако, мы все же будем стараться избегать нестабильного кода там, где это
+только возможно. В частности, мы не будем использовать никакие встроенные
+функции, которые делают код немножко лучше или немножко эффективней, потому что
+они постоянно нестабильны. Хотя многие встроенные функции в других местах
+действительно *стали* стабильными (`std::ptr` и `str::mem` состоят из множества
+встроенных функций).
 
-Ultimately this means our implementation may not take advantage of all
-possible optimizations, though it will be by no means *naive*. We will
-definitely get into the weeds over nitty-gritty details, even
-when the problem doesn't *really* merit it.
+В общем случае это означает, что наша реализация не будет обладать
+преимуществами всех возможных оптимизаций, хотя и без сомнений не будет
+*наивной*. Мы погрузимся во все самые мелкие детали, даже если вопросы не будут
+стоить выеденного яйца.
 
-You wanted advanced. We're gonna go advanced.
+Вы хотели продвинутого программирования. Будет вам продвинутое.

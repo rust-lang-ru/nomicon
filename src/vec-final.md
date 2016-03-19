@@ -1,4 +1,4 @@
-% The Final Code
+% Получившийся код
 
 ```rust
 #![feature(unique)]
@@ -21,10 +21,10 @@ struct RawVec<T> {
 impl<T> RawVec<T> {
     fn new() -> Self {
         unsafe {
-            // !0 is usize::MAX. This branch should be stripped at compile time.
+            // !0 это usize::MAX. Эта ветка должна удалиться во время компиляции.
             let cap = if mem::size_of::<T>() == 0 { !0 } else { 0 };
 
-            // heap::EMPTY doubles as "unallocated" and "zero-sized allocation"
+            // heap::EMPTY служит как для "невыделения", так и для "выделения нулевого размера"
             RawVec { ptr: Unique::new(heap::EMPTY as *mut T), cap: cap }
         }
     }
@@ -33,8 +33,8 @@ impl<T> RawVec<T> {
         unsafe {
             let elem_size = mem::size_of::<T>();
 
-            // since we set the capacity to usize::MAX when elem_size is
-            // 0, getting to here necessarily means the Vec is overfull.
+            // из-за того, что мы установили емкость в usize::MAX если elem_size равен
+            // 0, то попадание сюда обозначает, что Vec переполнен.
             assert!(elem_size != 0, "capacity overflow");
 
             let align = mem::align_of::<T>();
@@ -51,7 +51,7 @@ impl<T> RawVec<T> {
                 (new_cap, ptr)
             };
 
-            // If allocate or reallocate fail, we'll get `null` back
+            // Если выделение или перераспределение памяти возвращается с ошибкой, получим `null`
             if ptr.is_null() { oom() }
 
             self.ptr = Unique::new(ptr as *mut _);
@@ -157,9 +157,9 @@ impl<T> Vec<T> {
         unsafe {
             let iter = RawValIter::new(&self);
 
-            // this is a mem::forget safety thing. If Drain is forgotten, we just
-            // leak the whole Vec's contents. Also we need to do this *eventually*
-            // anyway, so why not do it now?
+            // это безопасный mem::forget. Если Drain забыт, у нас просто утечет
+            // все содержимое Vec. К тому же нам нужно сделать это со *временем*
+            // в любом случае, так почему не сделать это сейчас?
             self.len = 0;
 
             Drain {
@@ -265,7 +265,7 @@ impl<T> DoubleEndedIterator for RawValIter<T> {
 
 
 pub struct IntoIter<T> {
-    _buf: RawVec<T>, // we don't actually care about this. Just need it to live.
+    _buf: RawVec<T>, // нам не нужно волноваться об этом. Просто нужно, чтобы это жило.
     iter: RawValIter<T>,
 }
 
@@ -305,14 +305,14 @@ impl<'a, T> DoubleEndedIterator for Drain<'a, T> {
 
 impl<'a, T> Drop for Drain<'a, T> {
     fn drop(&mut self) {
-        // pre-drain the iter
+        // пре-опустошение итератора
         for _ in &mut self.iter {}
     }
 }
 
-/// Abort the process, we're out of memory!
+/// Прерываем процесс с ошибкой, мы получили нехватку памяти!
 ///
-/// In practice this is probably dead code on most OSes
+/// На практике, в большинстве ОС это мертвый код
 fn oom() {
     ::std::process::exit(-9999);
 }

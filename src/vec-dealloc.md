@@ -1,14 +1,16 @@
-% Deallocating
+% Освобождение
 
-Next we should implement Drop so that we don't massively leak tons of resources.
-The easiest way is to just call `pop` until it yields None, and then deallocate
-our buffer. Note that calling `pop` is unneeded if `T: !Drop`. In theory we can
-ask Rust if `T` `needs_drop` and omit the calls to `pop`. However in practice
-LLVM is *really* good at removing simple side-effect free code like this, so I
-wouldn't bother unless you notice it's not being stripped (in this case it is).
+Следующее, что мы должны сделать - это реализовать Drop так, чтобы у нас не 
+происходила широкомасштабная утечка кучи ресурсов. Самым простым способом будет вызывать
+`pop` до тех пор пока он не вернет None, и затем освободить наш буфер. Помните,
+что вызов `pop` не нужен, если `T: !Drop`. В теории мы можем спросить у Rust, 
+является ли `T` `needs_drop` и избежать вызова `pop`. Однако, на практике, 
+LLVM *действительно* хорош в удалении такого простого независимого кода без 
+побочных эффектов, поэтому я бы не стал беспокоится, если только вы не заметите, что 
+он не удален (в этом случае он будет удален).
 
-We must not call `heap::deallocate` when `self.cap == 0`, as in this case we
-haven't actually allocated any memory.
+Мы не должны вызывать `heap::deallocate`, если `self.cap == 0`, так как в этом
+случае мы еще на самом деле не выделили память.
 
 
 ```rust,ignore

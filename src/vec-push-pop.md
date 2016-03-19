@@ -1,21 +1,24 @@
-% Push and Pop
+% Push и Pop
 
-Alright. We can initialize. We can allocate. Let's actually implement some
-functionality! Let's start with `push`. All it needs to do is check if we're
-full to grow, unconditionally write to the next index, and then increment our
-length.
+Отлично. Мы можем инициализировать. Мы можем выделять память. Давайте теперь
+реализуем немного функциональности! Начнем с `push`. Все что ему нужно, это
+проверить можем ли мы расти, безусловно записать по следующему индексу элемент и
+увеличить длину.
 
-To do the write we have to be careful not to evaluate the memory we want to write
-to. At worst, it's truly uninitialized memory from the allocator. At best it's the
-bits of some old value we popped off. Either way, we can't just index to the memory
-and dereference it, because that will evaluate the memory as a valid instance of
-T. Worse, `foo[idx] = x` will try to call `drop` on the old value of `foo[idx]`!
+Для записи нам надо быть осторожными с обращениями к памяти, в которую мы
+собираемся делать запись. В худшем случае - это настоящая неинициализированная
+память, полученная от аллокатора. В лучшем - это биты, оставшиеся от старых
+значений, которые уже удалились. Так или иначе, мы не можем проиндексировать ее
+и разыменовать, потому что это приведет к обращению к ней, как к правильному
+экземпляру типа T. Что хуже, `foo[idx] = x` попытается вызвать `drop` у старого
+значения `foo[idx]`!
 
-The correct way to do this is with `ptr::write`, which just blindly overwrites the
-target address with the bits of the value we provide. No evaluation involved.
+Правильным путем будет сделать `ptr::write`, который вслепую заменяет
+значение по заданному адресу значением, которое мы предоставим. Никаких
+обращений не происходит.
 
-For `push`, if the old len (before push was called) is 0, then we want to write
-to the 0th index. So we should offset by the old len.
+Для `push` если старая длина (до его вызова) была 0, то записываем по 0-ому
+индексу. Итак, нам нужно сместиться на старое значение длины.
 
 ```rust,ignore
 pub fn push(&mut self, elem: T) {
@@ -25,21 +28,20 @@ pub fn push(&mut self, elem: T) {
         ptr::write(self.ptr.offset(self.len as isize), elem);
     }
 
-    // Can't fail, we'll OOM first.
+    // Не вызовет ошибку, потому что мы вызовем сначала OOM.
     self.len += 1;
 }
 ```
 
-Easy! How about `pop`? Although this time the index we want to access is
-initialized, Rust won't just let us dereference the location of memory to move
-the value out, because that would leave the memory uninitialized! For this we
-need `ptr::read`, which just copies out the bits from the target address and
-interprets it as a value of type T. This will leave the memory at this address
-logically uninitialized, even though there is in fact a perfectly good instance
-of T there.
+Легко! Что насчет `pop`? Хоть индекс и инициализирован во время доступа, Rust не
+позволит нам разыменовать место в памяти для вытаскивания значения, потому что
+это оставит память неинициализированной! Для этого нам нужно `ptr::read`,
+которая просто копирует байты из целевого адреса и интерпретирует их как
+значение типа T. Это оставит память по этому адресу логически
+неинициализированной, хотя на самом деле там отличный экземпляр типа T.
 
-For `pop`, if the old len is 1, we want to read out of the 0th index. So we
-should offset by the new len.
+Для `pop` если старое значение длины 1, то мы хотим прочитать 0-й индекс. Итак,
+нам нужно сместиться на новое значение длины.
 
 ```rust,ignore
 pub fn pop(&mut self) -> Option<T> {
