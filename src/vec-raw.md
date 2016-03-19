@@ -21,7 +21,7 @@ impl<T> RawVec<T> {
         }
     }
 
-    // неизмененная из Vec
+    // взято из Vec без изменений
     fn grow(&mut self) {
         unsafe {
             let align = mem::align_of::<T>();
@@ -80,7 +80,7 @@ impl<T> Vec<T> {
         Vec { buf: RawVec::new(), len: 0 }
     }
 
-    // push/pop/insert/remove lв основном без изменений:
+    // push/pop/insert/remove в основном без изменений:
     // * `self.ptr -> self.ptr()`
     // * `self.cap -> self.cap()`
     // * `self.grow -> self.buf.grow()`
@@ -103,7 +103,7 @@ struct IntoIter<T> {
     end: *const T,
 }
 
-// next и next_back, буквально, не поменялись, потом что не ссылаются на buf
+// next и next_back, буквально, не поменялись, потому что не ссылаются на buf
 
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
