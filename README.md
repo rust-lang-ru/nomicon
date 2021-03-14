@@ -9,7 +9,7 @@
 
 # Оригинал
 
-https://github.com/rust-lang/rust/tree/master/src/doc/nomicon
+https://github.com/rust-lang/nomicon
 
 # Статус
 
@@ -20,7 +20,7 @@ https://github.com/rust-lang/rust/tree/master/src/doc/nomicon
 
 [Содержание][summary]
 
-[summary]: https://github.com/ruRust/rustonomicon/blob/master/src/SUMMARY.md
+[summary]: https://github.com/rust-lang-ru/rustonomicon/blob/master/src/SUMMARY.md
 
 # Темное искусство продвинутого и небезопасного программирования на Rust
 
@@ -57,4 +57,4 @@ Rust. Если это не так, то сначала почитайте [кн�
 теорию типов. Мы будем много рассказывать о различных типах безопасности и
 гарантий.
 
-[trpl]: https://github.com/ruRust/rust_book_ru
+[trpl]: https://github.com/rust-lang-ru/book
