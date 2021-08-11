@@ -154,4 +154,4 @@ struct FooRepr {
 представлении. Поэтому сейчас нам кажется, что оставить нетронутым расположение
 перечислений в памяти, будет *особенно* целесообразно.
 
-[dst]: exotic-sizes.html#dynamically-sized-types-dsts
+[dst]: exotic-sizes.md
