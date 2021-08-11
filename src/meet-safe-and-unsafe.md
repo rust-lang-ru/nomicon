@@ -95,6 +95,6 @@ Rust позволяет вам делать действительно сума�
 неправильна. Rust предоставляет много инструментов для избавления от этих штук,
 но считаетстя, что эти проблемы нельзя полностью предотвратить.
 
-[pointer aliasing rules]: references.html
-[uninitialized memory]: uninitialized.html
-[race]: races.html
+[pointer aliasing rules]: references.md
+[uninitialized memory]: uninitialized.md
+[race]: races.md
