@@ -74,5 +74,5 @@ Rust не разрешит вам создать перечисление, в к
 
 Это - модификатор для `repr(C)` и `repr(rust)`.
 
-[drop flags]: drop-flags.html
+[drop flags]: drop-flags.md
 [ub loads]: https://github.com/rust-lang/rust/issues/27060
