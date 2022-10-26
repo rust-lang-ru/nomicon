@@ -63,4 +63,4 @@
         - [Получившийся код](./arc-mutex/arc-final.md)
 - [FFI](ffi.md)
 - [Внутри `std`](beneath-std.md)
-    - [#[panic_handler]](panic-handler.md)
+    - [`#[panic_handler]`](panic-handler.md)
