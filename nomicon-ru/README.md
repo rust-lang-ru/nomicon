@@ -20,7 +20,7 @@ https://github.com/rust-lang/nomicon
 
 [Содержание][summary]
 
-[summary]: https://github.com/rust-lang-ru/rustonomicon/blob/master/src/SUMMARY.md
+[summary]: https://github.com/rust-lang-ru/nomicon/blob/master/nomicon-ru/src/SUMMARY.md
 
 # Темное искусство продвинутого и небезопасного программирования на Rust
 
